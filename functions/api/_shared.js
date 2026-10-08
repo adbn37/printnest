@@ -1,0 +1,4 @@
+export function authorize(request,env){const header=request.headers.get('authorization')||'';return Boolean(env.ADMIN_TOKEN&&env.ADMIN_TOKEN.length>=16&&header===`Bearer ${env.ADMIN_TOKEN}`)}
+export function json(body,status=200){return new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json; charset=utf-8','cache-control':'no-store'}})}
+export async function getCatalog(env){if(!env.PRINTNEST_BUCKET)throw new Error('R2 bucket PRINTNEST_BUCKET not configured');let object=await env.PRINTNEST_BUCKET.get('catalog/products.json');if(!object)return [];const data=await object.json();return Array.isArray(data)?data:[]}
+export async function putCatalog(env,data){await env.PRINTNEST_BUCKET.put('catalog/products.json',JSON.stringify(data),{httpMetadata:{contentType:'application/json'}})}
