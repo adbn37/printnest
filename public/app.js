@@ -22,7 +22,20 @@ function renderBag(){let n=bag.reduce((a,b)=>a+b.qty,0);$('cartCount').textConte
 function drawer(show){$('drawer').classList.toggle('open',show);$('drawer').setAttribute('aria-hidden',String(!show));$('overlay').hidden=!show;document.body.style.overflow=show?'hidden':''}
 $('cartButton').onclick=()=>drawer(true);$('closeCart').onclick=()=>drawer(false);$('overlay').onclick=()=>drawer(false);
 function whatsapp(message){const url='https://wa.me/'+PHONE+'?text='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer')}
-$('checkout').onclick=()=>{if(!bag.length)return toast('Add a product first');let name=$('checkoutName').value.trim();if(!name)return toast('Please enter your name');let entries=bag.map(b=>{let p=products.find(x=>x.id===b.id);return p?`• ${p.title} × ${b.qty} (${price(p.price)})`:''}).filter(Boolean).join('\n');let total=bag.reduce((n,b)=>{let p=products.find(x=>x.id===b.id);return n+(p?.price??0)*b.qty},0);whatsapp(`Hello 3D PRINTNEST! I'd like to order:\n\nName: ${name}\n${entries}\n\nListed subtotal: BND ${total.toFixed(2)} (excluding unpriced items)\nNotes: ${$('checkoutNotes').value.trim()||'None'}\n\nPlease confirm the final price, availability and payment details. Thank you!`)};
+$('checkout').onclick=async()=>{
+ if(!bag.length)return toast('Add a product first');
+ const name=$('checkoutName').value.trim(),phone=$('checkoutPhone').value.trim(),notes=$('checkoutNotes').value.trim(),proof=$('checkoutProof').files[0];
+ if(name.length<2||!/^[+\d\s()-]{7,25}$/.test(phone))return toast('Enter your name and WhatsApp phone number');
+ if(proof&&proof.size>5*1024*1024)return toast('Payment proof must be under 5MB');
+ const button=$('checkout');button.disabled=true;$('checkoutResult').textContent='Saving your order…';
+ const form=new FormData();form.set('name',name);form.set('phone',phone);form.set('notes',notes);form.set('items',JSON.stringify(bag));if(proof)form.set('proof',proof);
+ try{const response=await fetch('/api/orders',{method:'POST',body:form});const result=await response.json();if(!response.ok)throw Error(result.error||'Order could not be saved');
+ const lines=bag.map(b=>{let p=products.find(x=>x.id===b.id);return p?`• ${p.title} × ${b.qty}`:''}).filter(Boolean).join('\n');
+ $('checkoutResult').textContent=`Order ${result.id} saved. Please press Send in WhatsApp to notify us.`;
+ whatsapp(`Hello 3D PRINTNEST! New website order\nOrder ID: ${result.id}\nName: ${name}\nPhone: ${phone}\nItems:\n${lines}\nTotal: ${result.total===null?'Quotation required':'BND '+Number(result.total).toFixed(2)}\nPayment proof: ${proof?'Uploaded — please verify':'Not uploaded'}\nNotes: ${notes||'None'}\n\nPlease confirm this order. `);
+ bag=[];save();
+ }catch(e){$('checkoutResult').textContent=e.message;toast(e.message)}finally{button.disabled=false}
+};
 $('references').onchange=e=>{let files=[...e.target.files];if(files.length>4){e.target.value='';return toast('Maximum 4 pictures')}const root=$('previews');root.innerHTML='';for(const f of files){if(!f.type.startsWith('image/'))continue;let img=new Image();const url=URL.createObjectURL(f);img.src=url;img.onload=()=>URL.revokeObjectURL(url);root.append(img)}};
 $('customForm').onsubmit=e=>{e.preventDefault();const form=new FormData(e.currentTarget);const files=[...$('references').files];if(files.length>4)return toast('Maximum 4 pictures');let txt=`Hello 3D PRINTNEST! I'd like a custom 3D print quotation.\n\nName: ${form.get('name')}\nDescription: ${form.get('description')}\nQuantity: ${form.get('quantity')}\nPreferred color: ${form.get('color')||'Flexible'}\nReference images: ${files.length} (I'll attach separately here in WhatsApp)\n\nPlease let me know if this can be made and the estimated price. Thank you!`;whatsapp(txt);if(files.length)toast('Attach your selected pictures manually in WhatsApp')};
 document.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{document.querySelectorAll('.chip').forEach(x=>x.classList.remove('active'));b.classList.add('active');filter=b.dataset.filter;render()});
@@ -30,7 +43,28 @@ function admin(show){$('adminModal').hidden=!show;document.body.style.overflow=s
 function msg(s){$('adminMessage').textContent=s}function password(){token=$('adminPassword').value.trim();return token}
 async function loadLive(){try{const r=await fetch('/api/products',{cache:'no-store'});if(!r.ok)throw Error('Request failed');let data=await r.json();if(Array.isArray(data.products)){products=[...seed,...data.products];render();renderBag();renderAdmin()}}catch(e){console.warn('Live catalog unavailable:',e)}}
 function renderAdmin(){const holder=$('adminProducts');holder.innerHTML='<h4>Uploaded products</h4>';const uploaded=products.filter(p=>p.id.startsWith('up-'));if(!uploaded.length){holder.innerHTML+='<div class="empty">No uploaded products yet.</div>';return}for(const p of uploaded){const row=document.createElement('div');row.className='admin-entry';let name=document.createElement('span');name.textContent=p.title;let del=document.createElement('button');del.textContent='Delete';del.onclick=()=>deleteProduct(p.id);row.append(name,del);holder.append(row)}}
-$('adminLoad').onclick=async()=>{if(!password())return msg('Enter the administrator password.');try{let r=await fetch('/api/admin/check',{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw Error('Wrong password or admin not configured');msg('Admin access verified.');await loadLive()}catch(e){msg(e.message)}};
+$('adminLoad').onclick=async()=>{if(!password())return msg('Enter the administrator password.');try{let r=await fetch('/api/admin/check',{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)throw Error('Wrong password or admin not configured');msg('Admin access verified.');await loadLive();await loadOrders()}catch(e){msg(e.message)}};
 $('adminForm').onsubmit=async e=>{e.preventDefault();if(!password())return msg('Enter the administrator password.');const btn=e.currentTarget.querySelector('button[type=submit]');const body=new FormData(e.currentTarget);const file=body.get('image');if(file?.size>8*1024*1024)return msg('Image must be 8 MB or smaller.');btn.disabled=true;msg('Uploading...');try{let r=await fetch('/api/products',{method:'POST',headers:{Authorization:`Bearer ${token}`},body});const data=await r.json();if(!r.ok)throw Error(data.error||'Upload failed');msg('Product published.');e.currentTarget.reset();await loadLive()}catch(err){msg(err.message)}finally{btn.disabled=false}};
 async function deleteProduct(id){if(!password())return msg('Enter administrator password.');if(!confirm('Delete this product?'))return;try{let r=await fetch('/api/products?id='+encodeURIComponent(id),{method:'DELETE',headers:{Authorization:`Bearer ${token}`}});const data=await r.json();if(!r.ok)throw Error(data.error||'Delete failed');bag=bag.filter(x=>x.id!==id);save();msg('Product removed.');await loadLive()}catch(e){msg(e.message)}}
 render();renderBag();loadLive();
+
+async function loadOrders(){
+ if(!token)return msg('Verify your admin password first');
+ const holder=$('adminOrders');holder.textContent='Loading orders…';
+ try{const r=await fetch('/api/orders',{headers:{Authorization:`Bearer ${token}`},cache:'no-store'});const data=await r.json();if(!r.ok)throw Error(data.error||'Could not load orders');const orders=data.orders||[];
+ $('orderSummary').textContent=`${orders.length} recent orders · ${orders.filter(x=>x.payment_status==='awaiting_review').length} payments to review · ${orders.filter(x=>x.fulfillment_status==='new').length} new orders`;
+ holder.innerHTML='';if(!orders.length){holder.textContent='No orders yet.';return}
+ for(const o of orders){const card=document.createElement('article');card.className='order-card';
+ const title=document.createElement('h4');title.textContent=`${o.id} — ${o.customer_name}`;card.append(title);
+ const details=document.createElement('p');details.textContent=`${o.created_at} · ${o.customer_phone} · ${o.total_cents===null?'Quote required':'BND '+(o.total_cents/100).toFixed(2)}`;card.append(details);
+ const lines=document.createElement('p');lines.textContent=o.items.map(i=>`${i.title} × ${i.quantity}`).join(' · ');card.append(lines);
+ const notes=document.createElement('p');notes.textContent='Notes: '+(o.notes||'None');card.append(notes);
+ if(o.receipt_key){const button=document.createElement('button');button.className='btn secondary';button.textContent='View payment proof';button.onclick=async()=>{const r=await fetch('/api/admin/receipt?id='+encodeURIComponent(o.id),{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)return msg('Could not access receipt');const blob=await r.blob();const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000)};card.append(button)}
+ const fields=document.createElement('div');fields.className='form-pair';
+ function field(label,options,value){const l=document.createElement('label');l.textContent=label;const select=document.createElement('select');for(const option of options){const e=document.createElement('option');e.value=option;e.textContent=option.replaceAll('_',' ');select.append(e)}select.value=value;l.append(select);fields.append(l);return select}
+ const payment=field('Payment',['unpaid','awaiting_review','verified','rejected'],o.payment_status),stage=field('Order stage',['new','confirmed','printing','ready','completed','cancelled'],o.fulfillment_status);card.append(fields);
+ const saveBtn=document.createElement('button');saveBtn.className='btn primary';saveBtn.textContent='Save status';saveBtn.onclick=async()=>{saveBtn.disabled=true;try{const r=await fetch('/api/orders',{method:'PATCH',headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},body:JSON.stringify({id:o.id,payment_status:payment.value,fulfillment_status:stage.value})});const data=await r.json();if(!r.ok)throw Error(data.error||'Update failed');msg('Order '+o.id+' updated');await loadOrders()}catch(e){msg(e.message)}finally{saveBtn.disabled=false}};card.append(saveBtn);holder.append(card)
+ }
+ }catch(e){holder.textContent=e.message}
+}
+$('loadOrders').onclick=loadOrders;
