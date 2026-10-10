@@ -18,7 +18,7 @@ export async function onRequestPost({request,env}){
  const catalog={
  'name-clicker':{title:'Personalised Name Clicker',price:350},'game-switch':{title:'Game Switch Clicker',price:null},'switch-keychain':{title:'Game Switch Clicker Keychain',price:null},'coin-bank':{title:'Custom Coin Bank',price:700},'license-plate':{title:'Custom License Plate Keychain',price:null},'clicker-color':{title:'Neon Game Switch Clicker',price:null},'gift-packaging':{title:'Custom Name Keychain',price:null},'coin-bank-color':{title:'Coin Bank — Color Options',price:700}
  };
- if(env.PRINTNEST_BUCKET){try{const object=await env.PRINTNEST_BUCKET.get('catalog/products.json');const extra=object?await object.json():[];for(const p of extra)if(p.id&&Number.isFinite(Number(p.price)))catalog[p.id]={title:clean(p.title,100),price:Math.round(Number(p.price)*100)}}catch{return bad('Product catalog unavailable',503)}}
+ if(env.PRINTNEST_BUCKET){try{const object=await env.PRINTNEST_BUCKET.get('catalog/products.json');const extra=object?await object.json():[];for(const p of extra)if(p.id&&p.visible!==false&&Number.isFinite(Number(p.price)))catalog[p.id]={title:clean(p.title,100),price:Math.round(Number(p.price)*100)}}catch{return bad('Product catalog unavailable',503)}}
  let items=[],total=0,unpriced=false;
  for(const s of submitted){let p=catalog[clean(s.id,80)],qty=Number(s.qty);if(!p||!Number.isSafeInteger(qty)||qty<1||qty>100)return bad('Invalid cart item');items.push({id:clean(s.id,80),title:p.title,quantity:qty,price_cents:p.price});if(p.price===null)unpriced=true;else total+=p.price*qty}
  if(total>100000000)return bad('Order exceeds allowed value');
