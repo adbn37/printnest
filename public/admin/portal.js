@@ -2,8 +2,36 @@ const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>
 let jwt='',me=null,orders=[],products=[];const bnd=c=>'BND '+((Number(c)||0)/100).toFixed(2);
 function message(s){$('notice').textContent=s;$('loginMessage').textContent=s}async function api(path,options={}){const r=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+jwt,...options.headers},cache:'no-store'});let data;try{data=await r.json()}catch{throw Error('Invalid response ('+r.status+')')}if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data}
 function section(name){document.querySelectorAll('.section').forEach(x=>x.hidden=x.id!==name);document.querySelectorAll('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===name));$('sectionTitle').textContent=name[0].toUpperCase()+name.slice(1);document.querySelector('.sidebar').classList.remove('open');if(name==='orders')renderOrders();if(name==='products')loadProducts();if(name==='finance')loadFinance()}
-async function signIn(credential){jwt=credential;try{me=await api('me');$('signin').hidden=true;$('portal').hidden=false;$('userEmail').textContent=me.email;$('roleBadge').textContent=me.role==='developer'?'Developer':'Master Admin';await loadOrders()}catch(e){jwt='';message(e.message)}}
-async function start(){try{const r=await fetch('/api/portal/config');const c=await r.json();if(!c.clientId){message('Set GOOGLE_CLIENT_ID in Cloudflare Pages Production variables.');return}let tries=0;const tick=()=>{if(!window.google?.accounts?.id){if(++tries<90)setTimeout(tick,150);else message('Google Sign-In script did not load.');return}google.accounts.id.initialize({client_id:c.clientId,callback:r=>signIn(r.credential),auto_select:false});google.accounts.id.renderButton($('googleBtn'),{theme:'outline',size:'large',width:260,text:'signin_with'});};tick()}catch(e){message('Could not initialize Google Sign-In: '+e.message)}}
+const SESSION_KEY='printnest_google_credential';
+function clearSession(){sessionStorage.removeItem(SESSION_KEY);jwt='';me=null;orders=[]}
+async function signIn(credential){
+ jwt=credential;
+ try{
+  me=await api('me');
+  sessionStorage.setItem(SESSION_KEY,credential);
+  $('signin').hidden=true;$('portal').hidden=false;
+  $('userEmail').textContent=me.email;
+  $('roleBadge').textContent=me.role==='developer'?'Developer':'Master Admin';
+  await loadOrders();
+ }catch(e){clearSession();$('portal').hidden=true;$('signin').hidden=false;message(e.message)}
+}
+async function start(){
+ const cached=sessionStorage.getItem(SESSION_KEY);
+ if(cached){
+  await signIn(cached);
+  if(me)return;
+ }
+ try{
+  const r=await fetch('/api/portal/config');const c=await r.json();
+  if(!c.clientId){message('Set GOOGLE_CLIENT_ID in Cloudflare Pages Production variables.');return}
+  let tries=0;
+  const tick=()=>{
+   if(!window.google?.accounts?.id){if(++tries<90)setTimeout(tick,150);else message('Google Sign-In script did not load.');return}
+   google.accounts.id.initialize({client_id:c.clientId,callback:r=>signIn(r.credential),auto_select:false});
+   google.accounts.id.renderButton($('googleBtn'),{theme:'outline',size:'large',width:260,text:'signin_with'});
+  };tick();
+ }catch(e){message('Could not initialize Google Sign-In: '+e.message)}
+}
 async function loadOrders(){try{const d=await api('orders');orders=d.orders||[];$('statOrders').textContent=orders.length;$('statReview').textContent=orders.filter(o=>o.payment_status==='awaiting_review').length;$('statPrinting').textContent=orders.filter(o=>o.fulfillment_status==='printing').length;$('statDone').textContent=orders.filter(o=>o.fulfillment_status==='completed').length;$('recentOrders').innerHTML='<div class="simple-row simple-head"><span>Order</span><span>Customer</span><span>Amount</span><span>Payment</span></div>'+ (orders.slice(0,8).map(o=>`<div class="simple-row"><strong>${esc(o.id)}</strong><span>${esc(o.customer_name)}</span><span>${o.total_cents===null?'Quote needed':bnd(o.total_cents)}</span><span class="status-text">${esc(o.payment_status.replaceAll('_',' '))}</span></div>`).join('')||'<div class="empty-row">No orders yet</div>');renderOrders();}catch(e){message(e.message)}}
 function opt(values,current){return values.map(v=>`<option value="${v}" ${v===current?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}
 function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();for(const o of list){const el=document.createElement('article');el.className='panel order';el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','printing','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="preview" hidden></div>`;
@@ -12,7 +40,7 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
  $('orderList').append(el)}if(!list.length)$('orderList').textContent='No matching orders.'}
 async function loadProducts(){try{const d=await api('products');products=d.products||[];$('productList').replaceChildren();if(d.warning)message(d.warning);for(const p of products){const line=document.createElement('div');line.className='simple-row';line.innerHTML=`<strong>${esc(p.title)}</strong><span>${esc(p.category)}</span><span>BND ${Number(p.price).toFixed(2)}</span>`;const del=document.createElement('button');del.textContent='Remove';del.onclick=async()=>{if(!confirm('Remove '+p.title+'?'))return;try{await api('products?id='+encodeURIComponent(p.id),{method:'DELETE'});await loadProducts()}catch(e){message(e.message)}};line.append(del);$('productList').append(line)}}catch(e){message(e.message)}}
 async function loadFinance(){try{const d=await api('finance');$('finRevenue').textContent=bnd(d.sales_cents);$('finExpenses').textContent=bnd(d.expenses_cents);$('finNet').textContent=bnd(d.net_cents);$('finCount').textContent=d.verified_count;$('expenseList').replaceChildren();for(const e of d.expenses){const el=document.createElement('div');el.className='simple-row';el.innerHTML=`<span>${esc(e.occurred_on)}</span><strong>${esc(e.description)}</strong><span>${esc(e.category)}</span><span>${bnd(e.amount_cents)}</span>`;const del=document.createElement('button');del.textContent='Delete';del.onclick=async()=>{if(!confirm('Delete this expense?'))return;try{await api('finance?id='+encodeURIComponent(e.id),{method:'DELETE'});await loadFinance()}catch(x){message(x.message)}};el.append(del);$('expenseList').append(el)}}catch(e){message(e.message)}}
-document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>section(b.dataset.section));$('menu').onclick=()=>document.querySelector('.sidebar').classList.toggle('expanded');$('logout').onclick=()=>{jwt='';me=null;orders=[];$('portal').hidden=true;$('signin').hidden=false;google?.accounts?.id?.disableAutoSelect?.();message('Signed out.');};$('search').oninput=renderOrders;$('paymentFilter').onchange=renderOrders;$('stageFilter').onchange=renderOrders;$('refreshOrders').onclick=loadOrders;
+document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>section(b.dataset.section));$('menu').onclick=()=>document.querySelector('.sidebar').classList.toggle('expanded');$('logout').onclick=()=>{clearSession();$('portal').hidden=true;$('signin').hidden=false;google?.accounts?.id?.disableAutoSelect?.();message('Signed out.');};$('search').oninput=renderOrders;$('paymentFilter').onchange=renderOrders;$('stageFilter').onchange=renderOrders;$('refreshOrders').onclick=loadOrders;
 $('productForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;try{await api('products',{method:'POST',body:new FormData(e.target)});e.target.reset();message('Product published.');await loadProducts()}catch(x){message(x.message)}finally{btn.disabled=false}};
 $('expenseForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;try{await api('finance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});e.target.reset();message('Expense saved.');await loadFinance()}catch(x){message(x.message)}finally{btn.disabled=false}};
 $('expenseForm').querySelector('[name="occurred_on"]').value=new Date().toLocaleDateString('en-CA');start();
