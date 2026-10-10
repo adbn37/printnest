@@ -16,3 +16,17 @@
 
 /* Finance V2 - compact, responsive and readable */
 .finance-toolbar{display:flex;align-items:end;justify-content:space-between;flex-wrap:wrap;gap:16px}.finance-toolbar h2{margin-bottom:4px}.finance-toolbar label{min-width:165px;margin:0}.finance-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.finance-explainer{font-size:13px;line-height:1.65;background:#fff;border:1px solid #e6e1ed;border-radius:12px;padding:15px 18px;color:#625e73}.finance-two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.finance-two .panel{margin:0}.finance-feedback{background:#f3faf5;border:1px solid #d2e6da;padding:14px 16px;border-radius:12px;color:#254d44;font-weight:700;margin-bottom:15px}.finance-feedback.finance-error{background:#fff5f5;border-color:#efcfcf;color:#a33344}.finance-scroll{display:grid;gap:8px;overflow-x:auto}.finance-row{display:flex;gap:14px;align-items:center;justify-content:space-between;border-bottom:1px solid #efeaf5;min-width:610px;padding:11px 4px;overflow-wrap:anywhere}.finance-row span{flex:1;min-width:0}.finance-row span:first-child{flex:1.4;font-weight:600}.finance-row span:nth-child(4){flex:1.2}.finance-row select{max-width:150px}.finance-action{padding:8px 12px;background:white;border:1px solid #ddd8e8;border-radius:9px;color:#5c4686}.finance-action:hover{background:#f7f4ff}@media(max-width:1050px){.finance-two{grid-template-columns:1fr}}@media(max-width:800px){.finance-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.finance-toolbar{align-items:stretch}.finance-toolbar label{width:100%}}
+
+
+/* Creality product estimates and filament / production controls */
+.creality-fields{border:1px solid #e3dbf3;border-radius:12px;padding:15px;margin:16px 0;background:#faf9ff}
+.creality-fields legend{font-weight:800;color:#4f3a99;padding:0 6px}
+.creality-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.inventory-stack{display:grid;gap:10px}
+.inventory-item{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px;padding:15px;border:1px solid #e8e3f1;border-radius:12px;background:#fff}
+.inventory-item-content{display:grid;gap:6px;min-width:0;flex:1}
+.inventory-item-content small{color:#75718b;line-height:1.5;overflow-wrap:anywhere}
+.inventory-item button{background:#f3efff;border:1px solid #dacbf9;color:#6541ba;border-radius:9px;padding:10px 13px;cursor:pointer;font-weight:700}
+#printerForm .toggle-row{display:flex;align-items:center;gap:8px;margin:12px 0}
+#printerForm .toggle-row input{width:auto}
+@media(max-width:850px){.creality-grid{grid-template-columns:1fr}}

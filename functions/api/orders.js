@@ -1,4 +1,5 @@
 import {authorize,json} from './_shared.js';
+import {mergeCatalog,snapshot} from './_printing.js';
 const clean=(v,max=200)=>String(v||'').trim().slice(0,max);
 const bad=(e,status=400)=>json({error:e},status);
 const paymentStates=['unpaid','awaiting_review','verified','rejected'];
@@ -15,12 +16,16 @@ export async function onRequestPost({request,env}){
  let submitted;try{submitted=JSON.parse(String(form.get('items')||'[]'))}catch{return bad('Invalid items')}
  if(!Array.isArray(submitted)||!submitted.length||submitted.length>40)return bad('Choose at least one item');
  // Server-owned pricing only; never trust prices submitted by the browser.
- const catalog={
- 'name-clicker':{title:'Personalised Name Clicker',price:350},'game-switch':{title:'Game Switch Clicker',price:null},'switch-keychain':{title:'Game Switch Clicker Keychain',price:null},'coin-bank':{title:'Custom Coin Bank',price:700},'license-plate':{title:'Custom License Plate Keychain',price:null},'clicker-color':{title:'Neon Game Switch Clicker',price:null},'gift-packaging':{title:'Custom Name Keychain',price:null},'coin-bank-color':{title:'Coin Bank — Color Options',price:700}
- };
- if(env.PRINTNEST_BUCKET){try{const object=await env.PRINTNEST_BUCKET.get('catalog/products.json');const extra=object?await object.json():[];for(const p of extra)if(p.id&&p.visible!==false&&Number.isFinite(Number(p.price)))catalog[p.id]={title:clean(p.title,100),price:Math.round(Number(p.price)*100)}}catch{return bad('Product catalog unavailable',503)}}
+ const catalog=Object.fromEntries(mergeCatalog().map(p=>[p.id,p]));
+ if(env.PRINTNEST_BUCKET){
+  try{const object=await env.PRINTNEST_BUCKET.get('catalog/products.json');const extra=object?await object.json():[];
+   if(!Array.isArray(extra))throw Error('Invalid product data');
+   for(const p of extra)if(p&&p.id)catalog[p.id]={...(catalog[p.id]||{}),...p};
+  }catch{return bad('Product catalog unavailable',503)}
+ }
+
  let items=[],total=0,unpriced=false;
- for(const s of submitted){let p=catalog[clean(s.id,80)],qty=Number(s.qty);if(!p||!Number.isSafeInteger(qty)||qty<1||qty>100)return bad('Invalid cart item');items.push({id:clean(s.id,80),title:p.title,quantity:qty,price_cents:p.price});if(p.price===null)unpriced=true;else total+=p.price*qty}
+ for(const s of submitted){let p=catalog[clean(s.id,80)],qty=Number(s.qty);if(!p||p.visible===false||!Number.isSafeInteger(qty)||qty<1||qty>100)return bad('Invalid cart item');const price=p.price===null?null:Math.round(Number(p.price)*100);if(price!==null&&(!Number.isSafeInteger(price)||price<0))return bad('Invalid product price');items.push({id:clean(s.id,80),title:p.title,quantity:qty,price_cents:price,...snapshot(p)});if(price===null)unpriced=true;else total+=price*qty}
  if(total>100000000)return bad('Order exceeds allowed value');
  if(proof&&proof.size){if(!env.PRINTNEST_RECEIPTS)return bad('Receipt storage not configured. Please contact PrintNest or send proof through WhatsApp.',503);if(proof.size>5*1024*1024)return bad('Proof must be 5 MB or smaller',413);if(!receiptTypes[proof.type]||!validReceipt(await proof.slice(0,16).arrayBuffer(),proof.type))return bad('Receipt must be PNG, JPG, WebP or PDF')}
  const id='PN-'+new Date().toISOString().slice(0,10).replaceAll('-','')+'-'+crypto.randomUUID().slice(0,8).toUpperCase();let key=null;
