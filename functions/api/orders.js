@@ -26,7 +26,7 @@ export async function onRequestPost({request,env}){
  const id='PN-'+new Date().toISOString().slice(0,10).replaceAll('-','')+'-'+crypto.randomUUID().slice(0,8).toUpperCase();let key=null;
  try{
  if(proof&&proof.size){key=`receipts/${id}.${receiptTypes[proof.type]}`;await env.PRINTNEST_RECEIPTS.put(key,proof.stream(),{httpMetadata:{contentType:proof.type}})}
- await env.PRINTNEST_DB.prepare('INSERT INTO orders(id,customer_name,customer_phone,notes,items_json,total_cents,payment_status,receipt_key,receipt_type) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,name,phone,notes,JSON.stringify(items),unpriced?null:total,key,key?proof.type:null,key?'awaiting_review':'unpaid').run();
+ await env.PRINTNEST_DB.prepare('INSERT INTO orders(id,customer_name,customer_phone,notes,items_json,total_cents,payment_status,receipt_key,receipt_type) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,name,phone,notes,JSON.stringify(items),unpriced?null:total,key?'awaiting_review':'unpaid',key,key?proof.type:null).run();
  return json({id,success:true,total:unpriced?null:total/100,payment_status:key?'awaiting_review':'unpaid'},201)
  }catch(e){if(key)try{await env.PRINTNEST_RECEIPTS.delete(key)}catch{};return bad('Order could not be saved. Please retry.',500)}
 }
