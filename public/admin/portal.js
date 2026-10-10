@@ -35,7 +35,7 @@ async function start(){
 async function loadOrders(){try{const d=await api('orders');orders=d.orders||[];$('statOrders').textContent=orders.length;$('statReview').textContent=orders.filter(o=>o.payment_status==='awaiting_review').length;$('statPrinting').textContent=orders.filter(o=>o.fulfillment_status==='printing').length;$('statDone').textContent=orders.filter(o=>o.fulfillment_status==='completed').length;$('recentOrders').innerHTML='<div class="simple-row simple-head"><span>Order</span><span>Customer</span><span>Amount</span><span>Payment</span></div>'+ (orders.slice(0,8).map(o=>`<div class="simple-row"><strong>${esc(o.id)}</strong><span>${esc(o.customer_name)}</span><span>${o.total_cents===null?'Quote needed':bnd(o.total_cents)}</span><span class="status-text">${esc(o.payment_status.replaceAll('_',' '))}</span></div>`).join('')||'<div class="empty-row">No orders yet</div>');renderOrders();}catch(e){message(e.message)}}
 function opt(values,current){return values.map(v=>`<option value="${v}" ${v===current?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}
 function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();for(const o of list){const el=document.createElement('article');el.className='panel order';el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','printing','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="preview" hidden></div>`;
- el.querySelector('.save').onclick=async()=>{if(el.querySelector('.pay').value==='verified'&&o.payment_status!=='verified'&&!confirm('Have you checked the actual bank transaction? A screenshot alone is NOT proof of payment.'))return;try{const saved=await api('orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id,payment_status:el.querySelector('.pay').value,fulfillment_status:el.querySelector('.stage').value})});await loadOrders();message(saved.registered?'Order saved. Creality cost recorded once; inventory: '+saved.inventory_state+'.':saved.missing_print_details?'Order saved. This order has no complete Creality snapshot, so add cost manually if needed.':'Order status saved; no duplicate printing cost was recorded.')}catch(e){message(e.message)}};
+ el.querySelector('.save').onclick=async()=>{if(el.querySelector('.pay').value==='verified'&&o.payment_status!=='verified'&&!confirm('Have you checked the actual bank transaction? A screenshot alone is NOT proof of payment.'))return;try{const saved=await api('orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id,payment_status:el.querySelector('.pay').value,fulfillment_status:el.querySelector('.stage').value})});await loadOrders();message(saved.registered?'Order saved. Creality estimates recorded once; stock must be updated manually.':saved.missing_print_details?'Order saved. This order has no complete Creality snapshot, so add cost manually if needed.':'Order status saved; no duplicate printing cost was recorded.')}catch(e){message(e.message)}};
  if(o.receipt_key)el.querySelector('.receipt').onclick=async()=>{const out=el.querySelector('.preview');if(!out.hidden){out.hidden=true;return}try{const r=await fetch('/api/portal/receipt?id='+encodeURIComponent(o.id),{headers:{Authorization:'Bearer '+jwt},cache:'no-store'});if(!r.ok){let d=await r.json();throw Error(d.error||r.status)}const blob=await r.blob(),url=URL.createObjectURL(blob);out.replaceChildren();if(blob.type.startsWith('image/')){const img=document.createElement('img');img.src=url;img.alt='Receipt';out.append(img)}else if(blob.type==='application/pdf'){const frame=document.createElement('iframe');frame.src=url;frame.title='Receipt';out.append(frame)}const a=document.createElement('a');a.textContent='Download proof';a.download=o.id+(blob.type==='application/pdf'?'.pdf':'.png');a.href=url;out.append(a);out.hidden=false}catch(e){message('Receipt: '+e.message)}};
  $('orderList').append(el)}if(!list.length)$('orderList').textContent='No matching orders.'}
 function printingInputs(p={}){const w=p.print_weight_g??'',t=p.print_minutes??'',c=p.print_cost_cents==null?'':(p.print_cost_cents/100).toFixed(2);return `<fieldset class="creality-fields"><legend>Creality print estimates (internal)</legend><p class="muted">Copy the values from the Creality app. Leave all three blank if unknown.</p><div class="creality-grid"><label>Weight (g)<input name="print_weight_g" type="number" step="0.001" min="0.001" value="${esc(w)}" placeholder="g"></label><label>Time (minutes)<input name="print_minutes" type="number" step="1" min="1" value="${esc(t)}" placeholder="minutes"></label><label>Cost (BND)<input name="print_cost" type="number" step="0.01" min="0" value="${esc(c)}" placeholder="BND"></label></div></fieldset>`}
@@ -64,31 +64,64 @@ const grams=mg=>(Number(mg||0)/1000).toFixed(2)+' g';
 const timeDisplay=m=>{m=Number(m)||0;return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'};
 async function loadInventory(){
  try{
-  const d=await api('production');
-  const cfg=d.settings||{};const form=$('printerForm');
+  const [d,stock]=await Promise.all([api('production'),api('inventory')]);
+  const cfg=d.settings||{},form=$('printerForm');
   form.elements.printer_name.value=cfg.printer_name||'Creality SPARKX i7';
   form.elements.average_watts.value=cfg.average_watts??0;
   form.elements.tariff_bnd_per_kwh.value=((Number(cfg.tariff_cents_per_kwh??12))/100).toFixed(2);
   form.elements.add_electricity.checked=cfg.add_electricity===1;
-  const list=$('rollList');list.replaceChildren();
-  if(!d.rolls.length){const msg=document.createElement('p');msg.className='muted';msg.textContent='No filament rolls yet. Add a roll, then choose Make default to enable automatic stock deduction.';list.append(msg)}
+  const rolls=$('rollList');rolls.replaceChildren();
+  if(!d.rolls.length)rolls.textContent='No filament rolls yet.';
   for(const roll of d.rolls){
    const card=document.createElement('article');card.className='inventory-item';
-   const top=document.createElement('div');top.className='inventory-item-content';
-   const name=document.createElement('strong');name.textContent=roll.label+(roll.is_default?' · Default':'');
-   const line=document.createElement('small');line.textContent=roll.material+' · '+roll.color+' · '+grams(roll.remaining_mg)+' of '+grams(roll.initial_mg)+' remaining'+(roll.purchase_cost_cents==null?'':' · Roll price '+bnd(roll.purchase_cost_cents));
-   top.append(name,line);card.append(top);
-   if(!roll.is_default){const btn=document.createElement('button');btn.type='button';btn.textContent='Make default';btn.onclick=async()=>{try{await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'default_roll',id:roll.id})});await loadInventory();inventoryFeedback('Default roll updated.')}catch(e){inventoryFeedback(e.message,true)}};card.append(btn)}
-   else{const btn=document.createElement('button');btn.type='button';btn.textContent='Disable automatic roll';btn.onclick=async()=>{try{await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'default_roll',id:''})});await loadInventory();inventoryFeedback('Automatic roll deduction disabled.')}catch(e){inventoryFeedback(e.message,true)}};card.append(btn)}
-   list.append(card)
+   const content=document.createElement('div');content.className='inventory-item-content';
+   const title=document.createElement('strong');title.textContent=roll.label;
+   const info=document.createElement('small');info.textContent=roll.material+' · '+roll.color+' · '+grams(roll.remaining_mg)+' / '+grams(roll.initial_mg)+' remaining'+(roll.purchase_cost_cents==null?'':' · Purchased '+bnd(roll.purchase_cost_cents));
+   content.append(title,info);card.append(content);
+   const btn=document.createElement('button');btn.type='button';btn.textContent='Adjust grams';
+   btn.onclick=async()=>{
+    const value=prompt('Adjust '+roll.label+' stock in grams. Enter +50 to add, or -15 to record usage. Current: '+grams(roll.remaining_mg),'');
+    if(value===null)return;
+    const amount=value.trim();if(!/^[-+]?\d{1,6}(?:\.\d{1,3})?$/.test(amount)||Number(amount)===0){inventoryFeedback('Enter a non-zero adjustment in grams, e.g. -15 or +20.',true);return;}
+    try{await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'adjust_roll',id:roll.id,delta_grams:amount})});await loadInventory();inventoryFeedback('Filament balance updated manually.');}
+    catch(e){inventoryFeedback(e.message,true)}
+   };card.append(btn);rolls.append(card);
+  }
+  const items=$('stockList');items.replaceChildren();
+  if(!stock.items.length)items.textContent='No other inventory items yet. Add boxes, accessories or supplies above.';
+  for(const item of stock.items){
+   const card=document.createElement('article');card.className='inventory-item';
+   const content=document.createElement('div');content.className='inventory-item-content';
+   const title=document.createElement('strong');title.textContent=item.name+' · '+item.quantity+' '+item.unit;
+   const line=document.createElement('small');line.textContent=item.category+(item.unit_cost_cents==null?'':' · '+bnd(item.unit_cost_cents)+' / '+item.unit)+(item.notes?' · '+item.notes:'');
+   content.append(title,line);card.append(content);
+   const controls=document.createElement('div');controls.className='stock-controls';
+   for(const [label,sign] of [['Add stock',1],['Use stock',-1]]){
+    const btn=document.createElement('button');btn.type='button';btn.textContent=label;if(sign<0)btn.classList.add('stock-use');
+    btn.onclick=async()=>{
+     const value=prompt(label+' for '+item.name+'. Enter quantity in '+item.unit+':','1');
+     if(value===null)return;
+     const count=Number(value.trim());
+     if(!/^\d{1,8}$/.test(value.trim())||!Number.isSafeInteger(count)||count<1||count>10000000){inventoryFeedback('Enter a whole quantity between 1 and 10,000,000.',true);return;}
+     try{await api('inventory',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'adjust',id:item.id,delta:sign*count})});await loadInventory();inventoryFeedback(label+' recorded for '+item.name+'.');}
+     catch(e){inventoryFeedback('Could not update '+item.name+': '+e.message,true)}
+    };controls.append(btn);
+   }card.append(controls);items.append(card);
   }
   const history=$('runList');history.replaceChildren();
-  if(!d.runs.length){history.textContent='No print jobs recorded yet.';return}
-  for(const run of d.runs){const card=document.createElement('article');card.className='inventory-item';const top=document.createElement('div');top.className='inventory-item-content';const name=document.createElement('strong');name.textContent=run.order_id+' · '+run.customer_name;const detail=document.createElement('small');detail.textContent=run.occurred_on+' · '+grams(run.weight_mg)+' · '+timeDisplay(run.print_minutes)+' · Printing '+bnd(run.print_cost_cents)+(run.electricity_cents?' + electricity '+bnd(run.electricity_cents):'')+' · Inventory: '+run.inventory_state;top.append(name,detail);card.append(top);
-   if(run.inventory_state==='pending'){const btn=document.createElement('button');btn.type='button';btn.textContent='Allocate default roll';btn.onclick=async()=>{if(!confirm('Deduct '+grams(run.weight_mg)+' from the current default roll for '+run.order_id+'?'))return;try{await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'allocate',order_id:run.order_id})});await loadInventory();inventoryFeedback('Stock allocated once for order '+run.order_id+'.')}catch(e){inventoryFeedback(e.message,true)}};card.append(btn)}
-   history.append(card)}
+  if(!d.runs.length)history.textContent='No print jobs recorded yet.';
+  for(const run of d.runs){
+   const card=document.createElement('article');card.className='inventory-item';
+   const content=document.createElement('div');content.className='inventory-item-content';
+   const title=document.createElement('strong');title.textContent=run.order_id+' · '+run.customer_name;
+   const info=document.createElement('small');
+   const state=run.inventory_state==='deducted'?'Previously deducted automatically':run.inventory_state==='pending'?'Manual stock tracking':run.inventory_state;
+   info.textContent=run.occurred_on+' · '+grams(run.weight_mg)+' · '+timeDisplay(run.print_minutes)+' · '+bnd(run.print_cost_cents)+' print cost'+(run.electricity_cents?' + '+bnd(run.electricity_cents)+' electricity':'')+' · '+state;
+   content.append(title,info);card.append(content);history.append(card);
+  }
  }catch(e){inventoryFeedback('Could not load inventory: '+e.message,true)}
 }
+
 $('printerForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,btn=f.querySelector('[type=submit]');btn.disabled=true;
  try{const v=Object.fromEntries(new FormData(f));await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...v,action:'settings',add_electricity:f.elements.add_electricity.checked})});await loadInventory();inventoryFeedback('Printer settings saved. Electricity rate applies to future print jobs only.')}catch(err){inventoryFeedback(err.message,true)}finally{btn.disabled=false}
 };
@@ -128,13 +161,29 @@ $('rollForm').onsubmit=async e=>{
   await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   saved=true;
   f.reset();f.elements.namedItem('material').value='PLA';f.elements.namedItem('grams').value='1000';
-  rollFormFeedback('Filament roll "'+label+'" saved successfully. Select Make default under Filament stock.');
+  rollFormFeedback('Filament roll "'+label+'" saved successfully. Stock can be adjusted manually under Filament stock.');
   await loadInventory();
-  inventoryFeedback('Filament roll added. Set it as your default to enable automatic stock deduction.');
+  inventoryFeedback('Filament roll added. No automatic stock deduction will occur.');
  }catch(err){
   const explanation=saved?'Roll was saved, but the stock list may not have refreshed. Refresh the page—do not add it again.':'Could not add roll: '+err.message;
   rollFormFeedback(explanation,true);inventoryFeedback(explanation,true);
  }finally{btn.disabled=false;btn.textContent='Add roll';}
+};
+
+$('stockForm').onsubmit=async e=>{
+ e.preventDefault();const f=e.currentTarget,button=f.querySelector('[type=submit]'),feedback=$('stockFeedback');
+ const data=Object.fromEntries(new FormData(f));
+ const show=(msg,error=false)=>{feedback.hidden=!msg;feedback.textContent=msg;feedback.classList.toggle('is-error',error)};
+ if(!data.name?.trim())return show('Enter an inventory item name.',true);
+ if(!/^\d{1,8}$/.test(String(data.quantity))||Number(data.quantity)>10000000)return show('Quantity must be a whole number, 0 to 10,000,000.',true);
+ if(data.unit_cost?.trim()&&!/^\d{1,6}(?:\.\d{1,2})?$/.test(data.unit_cost))return show('Unit cost must be BND with at most two decimal places.',true);
+ button.disabled=true;button.textContent='Saving item…';show('Saving item…');
+ let saved=false;
+ try{
+  await api('inventory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});saved=true;
+  f.reset();f.elements.quantity.value='0';await loadInventory();show('Inventory item added. Use Add stock / Use stock to update quantities.');
+ }catch(err){show(saved?'Item saved, but refresh failed. Refresh the page before trying again.':err.message,true)}
+ finally{button.disabled=false;button.textContent='Add inventory item'}
 };
 
 let financeReport=null;

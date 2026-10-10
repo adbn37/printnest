@@ -36,3 +36,9 @@
 .roll-feedback.is-error{background:#fff4f4;border-color:#f1bcbf;color:#a12e39}
 .roll-input-invalid{border:2px solid #bf3f4e!important;box-shadow:0 0 0 2px #bf3f4e22}
 #rollForm button[type=submit]:disabled{opacity:.68;cursor:progress}
+
+/* General-purpose manual inventory */
+#stockForm button[type=submit]:disabled{opacity:.65;cursor:progress}
+.inventory-item .stock-controls{display:flex;flex-wrap:wrap;gap:8px}
+.inventory-item .stock-controls button{padding:9px 12px}
+.inventory-item .stock-controls .stock-use{background:#fff7f5;color:#9a4e30;border-color:#f0d4c4}

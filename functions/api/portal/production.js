@@ -1,6 +1,5 @@
 import {json} from '../_shared.js';
 import {guard,invalid} from './_auth.js';
-import {allocatePendingProduction} from '../_production.js';
 const clean=(s,n=80)=>String(s??'').trim().slice(0,n);
 const dec=(s,max,places=2)=>{const x=String(s??'').trim();if(!new RegExp('^\\d{1,7}(?:\\.\\d{1,'+places+'})?$').test(x))return null;const v=Number(x);return Number.isFinite(v)&&v>=0&&v<=max?v:null};
 const audit=(db,email,action,id,data)=>db.prepare('INSERT INTO portal_audit(actor_email,action,entity_id,detail) VALUES (?,?,?,?)').bind(email,action,id,JSON.stringify(data));
@@ -35,15 +34,17 @@ export async function onRequestPost({request,env}){
     audit(db,g.user.email,'production.roll.add',id,{label,material,color,grams,purchase_cost_cents:cost})
    ]);return json({ok:true,id},201);
   }
-  if(action==='default_roll'){
-   const id=clean(d.id,80),roll=await db.prepare('SELECT id FROM printnest_filament_rolls WHERE id=?').bind(id).first();if(id&& !roll)return invalid('Roll not found',404);
-   // Clear default, then select the selected roll in the same transaction.
-   const qs=[db.prepare('UPDATE printnest_filament_rolls SET is_default=0 WHERE is_default=1')];if(id)qs.push(db.prepare('UPDATE printnest_filament_rolls SET is_default=1 WHERE id=?').bind(id));qs.push(audit(db,g.user.email,'production.roll.default',id||'none',{}));
-   await db.batch(qs);return json({ok:true});
+  if(action==='adjust_roll'){
+   const id=clean(d.id,80),raw=String(d.delta_grams??'').trim();
+   if(!id||!/^[-+]?\d{1,6}(?:\.\d{1,3})?$/.test(raw))return invalid('Enter a gram adjustment (up to 3 decimal places)');
+   const mg=Math.round(Number(raw)*1000);
+   if(!mg||Math.abs(mg)>100000000)return invalid('Gram adjustment must be non-zero and within limits');
+   const result=await db.prepare('UPDATE printnest_filament_rolls SET remaining_mg=remaining_mg+? WHERE id=? AND remaining_mg+? BETWEEN 0 AND initial_mg').bind(mg,id,mg).run();
+   if(!result.meta?.changes)return invalid('Roll not found or adjustment exceeds its capacity / remaining stock',409);
+   await audit(db,g.user.email,'production.roll.adjust',id,{delta_mg:mg}).run();
+   return json({ok:true});
   }
-  if(action==='allocate'){
-   const order=clean(d.order_id,80);if(!order)return invalid('Order ID required');try{return json(await allocatePendingProduction(db,order,g.user.email))}catch(e){return invalid(e.message||'Unable to allocate inventory',409)}
-  }
+  if(action==='default_roll'||action==='allocate')return invalid('Global default roll allocation has been retired. Adjust stock manually.',409);
   return invalid('Unsupported production action');
  }catch{return invalid('Could not save inventory or printer settings. Check D1 migration.',500)}
 }
