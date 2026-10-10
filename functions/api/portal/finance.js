@@ -1,7 +1,8 @@
 import {json} from '../_shared.js';
 import {guard,invalid} from './_auth.js';
+import {postStockPurchase,bndCents,reverseStockPurchase} from '../_stock_sync.js';
 
-const expenseCategories=['Filament','Packaging','Shipping','Machine maintenance','Equipment','Electricity','Marketing','Other'];
+const expenseCategories=['Filament','Packaging','Accessories','Supplies','Shipping','Machine maintenance','Equipment','Electricity','Marketing','Other'];
 const jobCategories=['Filament','Packaging','Electricity','Labour','Hardware','Finishing','Other'];
 const kinds=['operating','inventory'];
 const clean=(x,max=160)=>String(x??'').trim().slice(0,max);
@@ -32,7 +33,9 @@ export async function onRequestGet({request,env}){
   const auto=await db.prepare("SELECT r.order_id,r.occurred_on,r.print_cost_cents,r.electricity_cents,r.stock_cost_cents,r.printer_name,o.customer_name FROM printnest_production_runs r JOIN orders o ON o.id=r.order_id WHERE r.occurred_on>=? AND r.occurred_on<? ORDER BY r.occurred_on DESC LIMIT 500").bind(start,end).all();
   const autoRows=auto.results.map(r=>({id:'automatic:'+r.order_id,order_id:r.order_id,customer_name:r.customer_name,occurred_on:r.occurred_on,category:'Creality Print',description:r.printer_name+' auto estimate (incl. electricity where enabled)',amount_cents:r.print_cost_cents+r.electricity_cents+(Number(r.stock_cost_cents)||0),source:'production'}));
   const sale=Number(sales.cents)||0,cost=(Number(costs.cents)||0)+autoRows.reduce((sum,row)=>sum+row.amount_cents,0),operating=Number(expenses.cents)||0;
-  return json({month:bounds.month,sales_cents:sale,verified_count:Number(sales.count)||0,direct_cost_cents:cost,job_cost_count:(Number(items.count)||0)+autoRows.length,operating_cents:operating,inventory_purchase_cents:Number(purchases.cents)||0,estimated_result_cents:sale-cost-operating,expenses:expenseRows.results,job_costs:[...costRows.results,...autoRows],orders:orderRows.results,expense_categories:expenseCategories,job_categories:jobCategories,note:'Monthly operating estimate, not audited accounting. Production print costs are automatically posted once on first Printing/Completed status; do not manually add the same Creality cost again. Revenue is recognized by verification date (historic verified orders fall back to created date). Job costs are shown by incurred date. Inventory purchases are excluded from expenses to avoid double counting when consumed. No refunds, partial payments or stock valuation.'});
+  const linked=await db.prepare('SELECT expense_id,stock_kind,stock_id,quantity_units,quantity_mg FROM printnest_stock_purchases').all();
+  const purchasesById=new Map(linked.results.map(p=>[p.expense_id,p]));
+  return json({month:bounds.month,sales_cents:sale,verified_count:Number(sales.count)||0,direct_cost_cents:cost,job_cost_count:(Number(items.count)||0)+autoRows.length,operating_cents:operating,inventory_purchase_cents:Number(purchases.cents)||0,estimated_result_cents:sale-cost-operating,expenses:expenseRows.results.map(e=>({...e,linked_purchase:purchasesById.get(e.id)||null})),job_costs:[...costRows.results,...autoRows],orders:orderRows.results,expense_categories:expenseCategories,job_categories:jobCategories,note:'Monthly operating estimate, not audited accounting. Production print costs are automatically posted once on first Printing/Completed status; do not manually add the same Creality cost again. Revenue is recognized by verification date (historic verified orders fall back to created date). Job costs are shown by incurred date. Inventory purchases are excluded from expenses to avoid double counting when consumed. No refunds, partial payments or stock valuation.'});
  }catch(e){return invalid('Finance migration not installed or finance query failed',503)}
 }
 
@@ -49,6 +52,11 @@ export async function onRequestPost({request,env}){
   if(action==='expense'){
    const kind=clean(d.expense_kind,15);
    if(!kinds.includes(kind)||!expenseCategories.includes(category))return invalid('Invalid expense category or type');
+   if(kind==='inventory'){
+    if(!d.stock_kind||!d.stock_id)return invalid('For stock purchases, choose the inventory item or filament roll to receive the stock');
+    const result=await postStockPurchase(db,{kind:String(d.stock_kind),id:String(d.stock_id),quantity:d.stock_quantity,amount_cents:amount,date,description:desc,actor:g.user.email,requestKey:String(d.request_key||'')});
+    return result.error?invalid(result.error):json(result,201);
+   }
    await db.batch([
     db.prepare('INSERT INTO portal_expenses(id,occurred_on,category,description,amount_cents,expense_kind,created_by) VALUES(?,?,?,?,?,?,?)').bind(id,date,category,desc,amount,kind,g.user.email),
     log(env,g.user.email,'finance.expense.add',id,{date,category,kind,amount_cents:amount})
@@ -75,6 +83,8 @@ export async function onRequestPatch({request,env}){
  try{
   const db=env.PRINTNEST_DB,old=await db.prepare('SELECT expense_kind FROM portal_expenses WHERE id=? AND voided_at IS NULL').bind(d.id).first();
   if(!old)return invalid('Expense not found',404);
+  const link=await db.prepare('SELECT id FROM printnest_stock_purchases WHERE expense_id=?').bind(d.id).first();
+  if(link&&d.expense_kind!=='inventory')return invalid('This inventory purchase is linked to stock. Void it with stock reversal rather than reclassifying.',409);
   await db.batch([
    db.prepare('UPDATE portal_expenses SET expense_kind=? WHERE id=? AND voided_at IS NULL').bind(d.expense_kind,d.id),
    log(env,g.user.email,'finance.expense.reclassify',d.id,{before:old.expense_kind,after:d.expense_kind})
@@ -92,10 +102,13 @@ export async function onRequestDelete({request,env}){
  try{
   const found=await db.prepare(`SELECT id FROM ${table} WHERE id=? AND voided_at IS NULL`).bind(id).first();
   if(!found)return invalid('Entry not found or already voided',404);
+  const reverse=kind==='expense'?await reverseStockPurchase(db,id,g.user.email):{linked:false};
+  if(reverse.error)return invalid(reverse.error,409);
   await db.batch([
+   ...(reverse.linked?[reverse.statement]:[]),
    db.prepare(`UPDATE ${table} SET voided_at=datetime('now'),voided_by=? WHERE id=? AND voided_at IS NULL`).bind(g.user.email,id),
-   log(env,g.user.email,'finance.'+kind+'.void',id,{})
+   log(env,g.user.email,'finance.'+kind+'.void',id,{reversed_stock:reverse.linked})
   ]);
   return json({ok:true});
- }catch{return invalid('Could not void entry',500)}
+ }catch{return invalid('Could not void entry or reverse linked stock. Check available quantities and V4 migration.',500)}
 }

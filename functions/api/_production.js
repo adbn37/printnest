@@ -1,10 +1,12 @@
 import {summarizeItems} from './_printing.js';
 import {checkAvailability} from './_materials.js';
+import {orderExtras} from './_order_extras.js';
 const today=()=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Brunei'}).format(new Date());
 const audit=(db,email,action,id,detail)=>db.prepare('INSERT INTO portal_audit(actor_email,action,entity_id,detail) VALUES(?,?,?,?)').bind(email,action,id,JSON.stringify(detail));
 export async function inspectOrderMaterials(db,order){
  const lines=JSON.parse(order.items_json),missing=lines.filter(l=>l.recipe_version!==1||!Array.isArray(l.materials)||l.materials.length===0||l.print_weight_g==null).map(l=>l.title);
- const check=await checkAvailability(db,lines);
+ const selectedExtras=await orderExtras(db,order.id);
+ const check=await checkAvailability(db,selectedExtras.length?[...lines,{quantity:1,materials:selectedExtras}]:lines);
  return {...check,missing_products:missing,available:missing.length===0&&check.available};
 }
 export async function saveOrderStatusWithProduction(db,order,{payment,stage,email}){

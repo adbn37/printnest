@@ -15,8 +15,8 @@ export async function onRequestPost({request,env}){
   const catalog=await getCatalog(env),all=mergeCatalog(catalog),lookup=new Map(all.map(p=>[p.id,p]));let first=null;
   for(const c of clean){const p=lookup.get(c.id);if(!p||p.product_type==='bundle'||p.visible===false||snapshot(p).print_weight_g===null||!Array.isArray(p.materials)||!p.materials.length)return invalid('Each bundle component must have Creality details and assigned materials');if(!first)first=p}
   // Extra box, bow, or other accessories added once per bundle, on top of component recipes.
-  const extras=await validateRecipe(env.PRINTNEST_DB,Array.isArray(d.extras)?d.extras:[],{requireFilament:false});
-  if(extras.some(e=>e.kind==='filament'))return invalid('Bundle extras must be accessory/packaging items; filament belongs to component recipes');
+  // Boxes and accessories are picked per individual customer order, never required in a bundle.
+  const extras=[];
   if(catalog.length>=200)return invalid('Catalog limit reached');
   const id='up-'+crypto.randomUUID();const entry={id,title,description,price:Number(price),category:'Gifts',image:first.image,visible:true,product_type:'bundle',components:clean,materials:extras,print_weight_g:null,print_minutes:null,print_cost_cents:null};
   await putCatalog(env,[...catalog,entry]);

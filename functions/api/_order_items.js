@@ -16,12 +16,13 @@ export function makeOrderItems(catalog,selected){
    for(const comp of p.components){const component=products.get(comp.id),units=Number(comp.quantity);if(!component||component.product_type==='bundle'||!Number.isInteger(units)||units<1)throw Error('Bundle component is unavailable');
     const snap=snapshot(component);if(snap.print_weight_g==null)throw Error('Bundle component lacks Creality estimates');
     grams+=snap.print_weight_g*units;minutes+=snap.print_minutes*units;cents+=snap.print_cost_cents*units;
-    materials.push(...recipeFromCatalog(component).map(m=>m.kind==='filament'?{...m,quantity_mg:m.quantity_mg*units}:{...m,quantity_units:m.quantity_units*units}));
+    materials.push(...recipeFromCatalog(component).filter(m=>m.kind==='filament').map(m=>({...m,quantity_mg:m.quantity_mg*units})));
    }
-   materials.push(...recipeFromCatalog(p));
+   // Packaging and accessories are chosen per order, not inherited from bundle defaults.
+   materials=materials.filter(m=>m.kind==='filament');
    print={print_weight_g:grams,print_minutes:minutes,print_cost_cents:cents};
    detail='bundle';
-  }else{materials=recipeFromCatalog(p);print=snapshot(p);detail='single'}
+  }else{materials=recipeFromCatalog(p).filter(m=>m.kind==='filament');print=snapshot(p);detail='single'}
   price=p.price===null?null:Math.round(Number(p.price)*100);
   if(price!==null&&(!Number.isSafeInteger(price)||price<0))throw Error('Invalid product price');
   if(price===null)unpriced=true;else total+=price*quantity;

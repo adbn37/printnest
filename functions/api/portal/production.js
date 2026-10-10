@@ -29,10 +29,17 @@ export async function onRequestPost({request,env}){
    const label=clean(d.label,90),material=clean(d.material,40),color=clean(d.color,40),grams=dec(d.grams,100000,3),price=String(d.purchase_cost??'').trim()?dec(d.purchase_cost,100000):null;
    if(!label||!material||!color||grams===null||grams<=0||price===null&&String(d.purchase_cost??'').trim())return invalid('Check roll name, material, colour, grams and optional purchase price');
    const mg=Math.round(grams*1000);const cost=price===null?null:Math.round(price*100),id=crypto.randomUUID();
-   await db.batch([
-    db.prepare('INSERT INTO printnest_filament_rolls(id,label,material,color,initial_mg,remaining_mg,purchase_cost_cents,is_default,created_by) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,label,material,color,mg,mg,cost,0,g.user.email),
-    audit(db,g.user.email,'production.roll.add',id,{label,material,color,grams,purchase_cost_cents:cost})
-   ]);return json({ok:true,id},201);
+   const purchase=d.record_purchase===true||String(d.record_purchase)==='true';
+   if(purchase&&(cost===null||cost<1))return invalid('Enter a positive roll purchase total when recording Finance purchase');
+   const steps=[db.prepare('INSERT INTO printnest_filament_rolls(id,label,material,color,initial_mg,remaining_mg,purchase_cost_cents,is_default,created_by) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,label,material,color,mg,mg,cost,0,g.user.email)];
+   let expenseId=null;
+   if(purchase){
+    expenseId=crypto.randomUUID();const date=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Brunei'}).format(new Date());
+    steps.push(db.prepare("INSERT INTO portal_expenses(id,occurred_on,category,description,amount_cents,expense_kind,created_by) VALUES(?,?,?,?,?,'inventory',?)").bind(expenseId,date,'Filament','Filament purchase: '+label,cost,g.user.email));
+    steps.push(db.prepare('INSERT INTO printnest_stock_purchases(id,expense_id,stock_kind,stock_id,quantity_units,quantity_mg,created_by,request_key) VALUES(?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),expenseId,'filament',id,0,mg,g.user.email,crypto.randomUUID()));
+   }
+   steps.push(audit(db,g.user.email,'production.roll.add',id,{label,material,color,grams,purchase_cost_cents:cost,linked_purchase:expenseId}));
+   await db.batch(steps);return json({ok:true,id,expense_id:expenseId},201);
   }
   if(action==='adjust_roll'){
    const id=clean(d.id,80),raw=String(d.delta_grams??'').trim();

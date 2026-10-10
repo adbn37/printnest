@@ -33,7 +33,7 @@ export async function onRequestPost({request,env}){
  let data;try{data=await request.formData()}catch{return invalid('Invalid product form')}
  const input=productInput(data);if(input.error)return invalid(input.error);
  const photo=data.get('image'),check=await validatePhoto(photo);if(check.error)return invalid(check.error);
- let materials;try{materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}
+ let materials;try{if(JSON.parse(String(data.get('materials_json')||'[]')).some(m=>m.kind!=='filament'))return invalid('Product materials must contain only filament; select boxes/accessories per order');materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}
  let key;
  try{const list=await getCatalog(env);if(list.length>=200)return invalid('Product limit reached');const id='up-'+crypto.randomUUID();key='images/'+id+'.'+check.ext;
   await env.PRINTNEST_BUCKET.put(key,photo.stream(),{httpMetadata:{contentType:photo.type}});
@@ -52,7 +52,7 @@ export async function onRequestPatch({request,env}){
   if(!current)return invalid('Product not found',404);
   const file=data.get('image');if(file?.size){const check=await validatePhoto(file);if(check.error)return invalid(check.error);newKey='images/'+crypto.randomUUID()+'.'+check.ext;await env.PRINTNEST_BUCKET.put(newKey,file.stream(),{httpMetadata:{contentType:file.type}})}
   let materials=Array.isArray(current.materials)?current.materials:[];
-  if(current.product_type!=='bundle'){try{materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}}
+  if(current.product_type!=='bundle'){try{if(JSON.parse(String(data.get('materials_json')||'[]')).some(m=>m.kind!=='filament'))return invalid('Product materials must contain only filament; add accessories in Orders');materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}}
   const updated={...current,...input,materials,visible:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};
   const oldKey=current.product_type==='bundle'?null:(current.image?.startsWith('/images/')?current.image.slice(1):null);
   const index=list.findIndex(p=>p.id===id);if(index>=0)list[index]=updated;else list.push(updated);
