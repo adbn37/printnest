@@ -92,8 +92,49 @@ async function loadInventory(){
 $('printerForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,btn=f.querySelector('[type=submit]');btn.disabled=true;
  try{const v=Object.fromEntries(new FormData(f));await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...v,action:'settings',add_electricity:f.elements.add_electricity.checked})});await loadInventory();inventoryFeedback('Printer settings saved. Electricity rate applies to future print jobs only.')}catch(err){inventoryFeedback(err.message,true)}finally{btn.disabled=false}
 };
-$('rollForm').onsubmit=async e=>{e.preventDefault();const f=e.currentTarget,btn=f.querySelector('[type=submit]');btn.disabled=true;
- try{await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...Object.fromEntries(new FormData(f)),action:'add_roll'})});f.reset();f.elements.material.value='PLA';f.elements.grams.value='1000';await loadInventory();inventoryFeedback('Filament roll added. Select Make default if you want automatic deductions.')}catch(err){inventoryFeedback(err.message,true)}finally{btn.disabled=false}
+function rollFormFeedback(text='',isError=false){
+ const out=$('rollFeedback');out.hidden=!text;out.textContent=text;out.classList.toggle('is-error',isError);
+}
+function rollFormError(input,text){
+ rollFormFeedback(text,true);
+ if(input){input.classList.add('roll-input-invalid');input.focus();}
+}
+$('rollForm').addEventListener('input',e=>{
+ if(e.target instanceof HTMLInputElement)e.target.classList.remove('roll-input-invalid');
+ const out=$('rollFeedback');if(out.classList.contains('is-error'))rollFormFeedback('');
+});
+$('rollForm').onsubmit=async e=>{
+ e.preventDefault();
+ const f=e.currentTarget,btn=f.querySelector('button[type="submit"]');
+ if(btn.disabled)return;
+ // HTML native validation previously stopped submit silently on some browsers.
+ for(const [name,label] of [['label','Roll name'],['material','Material'],['color','Colour']]){
+  const el=f.elements.namedItem(name);
+  if(!el||!el.value.trim()){rollFormError(el,'Please enter '+label+' before adding a roll.');return;}
+ }
+ const weight=f.elements.namedItem('grams'),w=weight.value.trim();
+ if(!/^\d{1,7}(?:\.\d{1,3})?$/.test(w)||Number(w)<=0||Number(w)>100000){
+  rollFormError(weight,'Starting weight must be greater than 0 and no more than 100,000 g (up to 3 decimal places).');return;
+ }
+ const price=f.elements.namedItem('purchase_cost'),c=price.value.trim();
+ if(c&&(!/^\d{1,7}(?:\.\d{1,2})?$/.test(c)||Number(c)>100000)){
+  rollFormError(price,'Purchase cost must be a valid BND amount with up to 2 decimals, or leave it blank.');return;
+ }
+ const label=f.elements.namedItem('label').value.trim();
+ const payload={...Object.fromEntries(new FormData(f)),action:'add_roll'};
+ btn.disabled=true;btn.textContent='Saving roll…';rollFormFeedback('Saving filament roll…');
+ let saved=false;
+ try{
+  await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  saved=true;
+  f.reset();f.elements.namedItem('material').value='PLA';f.elements.namedItem('grams').value='1000';
+  rollFormFeedback('Filament roll "'+label+'" saved successfully. Select Make default under Filament stock.');
+  await loadInventory();
+  inventoryFeedback('Filament roll added. Set it as your default to enable automatic stock deduction.');
+ }catch(err){
+  const explanation=saved?'Roll was saved, but the stock list may not have refreshed. Refresh the page—do not add it again.':'Could not add roll: '+err.message;
+  rollFormFeedback(explanation,true);inventoryFeedback(explanation,true);
+ }finally{btn.disabled=false;btn.textContent='Add roll';}
 };
 
 let financeReport=null;

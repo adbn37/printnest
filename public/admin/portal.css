@@ -30,3 +30,9 @@
 #printerForm .toggle-row{display:flex;align-items:center;gap:8px;margin:12px 0}
 #printerForm .toggle-row input{width:auto}
 @media(max-width:850px){.creality-grid{grid-template-columns:1fr}}
+
+/* Add Roll: inline progress, field validation and accessible errors. */
+.roll-feedback{margin:14px 0;padding:12px 14px;background:#f2faf6;border:1px solid #b6deca;border-radius:10px;color:#1d6347;font-weight:650;line-height:1.5}
+.roll-feedback.is-error{background:#fff4f4;border-color:#f1bcbf;color:#a12e39}
+.roll-input-invalid{border:2px solid #bf3f4e!important;box-shadow:0 0 0 2px #bf3f4e22}
+#rollForm button[type=submit]:disabled{opacity:.68;cursor:progress}
