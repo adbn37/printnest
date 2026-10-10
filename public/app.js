@@ -59,7 +59,32 @@ async function loadOrders(){
  const details=document.createElement('p');details.textContent=`${o.created_at} · ${o.customer_phone} · ${o.total_cents===null?'Quote required':'BND '+(o.total_cents/100).toFixed(2)}`;card.append(details);
  const lines=document.createElement('p');lines.textContent=o.items.map(i=>`${i.title} × ${i.quantity}`).join(' · ');card.append(lines);
  const notes=document.createElement('p');notes.textContent='Notes: '+(o.notes||'None');card.append(notes);
- if(o.receipt_key){const button=document.createElement('button');button.className='btn secondary';button.textContent='View payment proof';button.onclick=async()=>{const r=await fetch('/api/admin/receipt?id='+encodeURIComponent(o.id),{headers:{Authorization:`Bearer ${token}`}});if(!r.ok)return msg('Could not access receipt');const blob=await r.blob();const url=URL.createObjectURL(blob);window.open(url,'_blank','noopener');setTimeout(()=>URL.revokeObjectURL(url),60000)};card.append(button)}
+ if(o.receipt_key){
+ const button=document.createElement('button');button.className='btn secondary';button.type='button';button.textContent='View payment proof';
+ const preview=document.createElement('div');preview.hidden=true;preview.style.cssText='margin:12px 0;max-width:100%;overflow:hidden';
+ let currentUrl=null;
+ button.onclick=async()=>{
+  if(!preview.hidden){preview.hidden=true;button.textContent='View payment proof';return}
+  button.disabled=true;button.textContent='Loading receipt…';
+  try{
+   const r=await fetch('/api/admin/receipt?id='+encodeURIComponent(o.id),{headers:{Authorization:'Bearer '+token},cache:'no-store'});
+   if(!r.ok){let error='HTTP '+r.status;try{const data=await r.json();error=data.error||error}catch{}throw Error(error)}
+   const blob=await r.blob();
+   if(currentUrl)URL.revokeObjectURL(currentUrl);
+   currentUrl=URL.createObjectURL(blob);
+   preview.replaceChildren();
+   if(blob.type.startsWith('image/')){
+    const img=document.createElement('img');img.src=currentUrl;img.alt='Payment proof for '+o.id;img.style.cssText='display:block;max-width:100%;max-height:65vh;object-fit:contain;border-radius:10px';preview.append(img);
+   }else if(blob.type==='application/pdf'){
+    const frame=document.createElement('iframe');frame.src=currentUrl;frame.title='Payment proof for '+o.id;frame.style.cssText='width:100%;height:65vh;border:1px solid #ddd;border-radius:10px';preview.append(frame);
+   }else{throw Error('Unsupported receipt format')}
+   const link=document.createElement('a');link.href=currentUrl;link.download='printnest-receipt-'+o.id+(blob.type==='application/pdf'?'.pdf':blob.type==='image/png'?'.png':blob.type==='image/webp'?'.webp':'.jpg');link.textContent='Download receipt';link.style.cssText='display:inline-block;margin-top:10px;text-decoration:underline';preview.append(link);
+   preview.hidden=false;button.textContent='Hide payment proof';msg('');
+  }catch(e){msg('Receipt error: '+e.message);button.textContent='View payment proof'}
+  finally{button.disabled=false}
+ };
+ card.append(button,preview)
+}
  const fields=document.createElement('div');fields.className='form-pair';
  function field(label,options,value){const l=document.createElement('label');l.textContent=label;const select=document.createElement('select');for(const option of options){const e=document.createElement('option');e.value=option;e.textContent=option.replaceAll('_',' ');select.append(e)}select.value=value;l.append(select);fields.append(l);return select}
  const payment=field('Payment',['unpaid','awaiting_review','verified','rejected'],o.payment_status),stage=field('Order stage',['new','confirmed','printing','ready','completed','cancelled'],o.fulfillment_status);card.append(fields);
