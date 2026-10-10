@@ -14,6 +14,6 @@ export async function onRequestPatch({request,env}){
   if(!old)return invalid('Order not found',404);
   if(p!==old.payment_status)return invalid('Only master admin may change payment status',403);
  }
- try{const r=await env.PRINTNEST_DB.prepare('UPDATE orders SET payment_status=?,fulfillment_status=? WHERE id=?').bind(p,s,id).run();if(!r.meta?.changes)return invalid('Order not found',404);
+ try{const r=await env.PRINTNEST_DB.prepare("UPDATE orders SET payment_status=?,fulfillment_status=?,verified_at=CASE WHEN ?='verified' AND payment_status!='verified' THEN datetime('now') WHEN ?!='verified' THEN NULL ELSE verified_at END WHERE id=?").bind(p,s,p,p,id).run();if(!r.meta?.changes)return invalid('Order not found',404);
  await env.PRINTNEST_DB.prepare('INSERT INTO portal_audit(actor_email,action,entity_id,detail) VALUES(?,?,?,?)').bind(g.user.email,'order.status',id,JSON.stringify({payment_status:p,fulfillment_status:s})).run();return json({ok:true})}catch{return invalid('Could not save status. Check portal migration.',500)}
 }

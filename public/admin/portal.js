@@ -57,8 +57,51 @@ async function loadProducts(){
   }
  }catch(e){message(e.message)}
 }
-async function loadFinance(){try{const d=await api('finance');$('finRevenue').textContent=bnd(d.sales_cents);$('finExpenses').textContent=bnd(d.expenses_cents);$('finNet').textContent=bnd(d.net_cents);$('finCount').textContent=d.verified_count;$('expenseList').replaceChildren();for(const e of d.expenses){const el=document.createElement('div');el.className='simple-row';el.innerHTML=`<span>${esc(e.occurred_on)}</span><strong>${esc(e.description)}</strong><span>${esc(e.category)}</span><span>${bnd(e.amount_cents)}</span>`;const del=document.createElement('button');del.textContent='Delete';del.onclick=async()=>{if(!confirm('Delete this expense?'))return;try{await api('finance?id='+encodeURIComponent(e.id),{method:'DELETE'});await loadFinance()}catch(x){message(x.message)}};el.append(del);$('expenseList').append(el)}}catch(e){message(e.message)}}
+let financeReport=null;
+const bruneiDate=()=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Brunei'}).format(new Date());
+function financeFeedback(text,error=false){const box=$('financeFeedback');box.textContent=text;box.hidden=!text;box.classList.toggle('finance-error',error)}
+function financeTop(){$('finance').scrollIntoView({behavior:'smooth',block:'start'})}
+function money(c){return (Number(c)||0)/100}
+function financeCsvCell(x){let s=String(x??'');if(/^[\s]*[=+\-@]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"'}
+function financeExport(){const d=financeReport;if(!d){financeFeedback('Load a month before exporting.',true);return}
+ const data=[['PrintNest monthly finance summary',d.month],['Metric','BND'],['Verified sales',money(d.sales_cents).toFixed(2)],['Direct job costs',money(d.direct_cost_cents).toFixed(2)],['Operating expenses',money(d.operating_cents).toFixed(2)],['Estimated result',money(d.estimated_result_cents).toFixed(2)],['Inventory purchases (not included in result)',money(d.inventory_purchase_cents).toFixed(2)],[],['Job costs'],['Date','Order ID','Customer','Category','Description','BND'],...d.job_costs.map(x=>[x.occurred_on,x.order_id,x.customer_name,x.category,x.description,money(x.amount_cents).toFixed(2)]),[],['Expenses / purchases'],['Date','Type','Category','Description','BND'],...d.expenses.map(x=>[x.occurred_on,x.expense_kind,x.category,x.description,money(x.amount_cents).toFixed(2)]),[],['Notes',d.note]];
+ const csv='\ufeff'+data.map(row=>row.map(financeCsvCell).join(',')).join('\r\n');const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));const link=document.createElement('a');link.href=url;link.download='PrintNest-Finance-'+d.month+'.csv';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+function financeActionButton(label,handler){const btn=document.createElement('button');btn.type='button';btn.className='finance-action';btn.textContent=label;btn.onclick=handler;return btn}
+function entryRow(parts){const row=document.createElement('div');row.className='finance-row';for(const part of parts){const cell=document.createElement('span');cell.textContent=part??'';row.append(cell)}return row}
+async function loadFinance(){
+ const month=$('financeMonth').value;
+ if(!/^\d{4}-\d{2}$/.test(month))return financeFeedback('Select a reporting month.',true);
+ try{
+  const d=await api('finance?month='+encodeURIComponent(month));financeReport=d;
+  $('finRevenue').textContent=bnd(d.sales_cents);$('finCosts').textContent=bnd(d.direct_cost_cents);$('finExpenses').textContent=bnd(d.operating_cents);$('finNet').textContent=bnd(d.estimated_result_cents);$('finPurchases').textContent=bnd(d.inventory_purchase_cents);$('finCount').textContent=d.verified_count;
+  $('finNet').style.color=d.estimated_result_cents<0?'#b34252':'#254d44';
+  const selector=$('costOrderSelect'),previous=selector.value;selector.replaceChildren();
+  const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Select an order';selector.append(placeholder);
+  for(const order of d.orders){const option=document.createElement('option');option.value=order.id;option.textContent=order.id+' — '+order.customer_name;selector.append(option)}
+  if([...selector.options].some(o=>o.value===previous))selector.value=previous;
+  const summary=$('financeOrders');summary.replaceChildren();
+  summary.append(entryRow(['Order','Customer','Sales','Direct cost','Job margin']));
+  for(const o of d.orders){const priced=o.total_cents!==null,verified=o.payment_status==='verified';summary.append(entryRow([o.id,o.customer_name,priced?bnd(o.total_cents):'Quote required',bnd(o.direct_cost_cents),verified&&priced?bnd(o.total_cents-o.direct_cost_cents):'Pending / unpriced']))}
+  if(!d.orders.length)summary.append(entryRow(['No orders yet']));
+  const costs=$('jobCostList');costs.replaceChildren();
+  for(const c of d.job_costs){const el=entryRow([c.occurred_on,c.order_id,c.category,c.description,bnd(c.amount_cents)]);el.append(financeActionButton('Void',async()=>{if(!confirm('Void this cost entry? The audit log will keep the change.'))return;try{await api('finance?kind=job_cost&id='+encodeURIComponent(c.id),{method:'DELETE'});financeFeedback('Job cost voided.');await loadFinance()}catch(e){financeFeedback(e.message,true)}}));costs.append(el)}
+  if(!d.job_costs.length)costs.textContent='No job costs recorded for this month.';
+  const expenses=$('expenseList');expenses.replaceChildren();
+  for(const e of d.expenses){const el=entryRow([e.occurred_on,e.category,e.description,bnd(e.amount_cents)]);
+   const kind=document.createElement('select');kind.setAttribute('aria-label','Entry type');
+   [['operating','Operating'],['inventory','Inventory purchase']].forEach(([value,label])=>{const op=document.createElement('option');op.value=value;op.textContent=label;kind.append(op)});kind.value=e.expense_kind;kind.onchange=async()=>{const previous=e.expense_kind;try{await api('finance',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'reclassify_expense',id:e.id,expense_kind:kind.value})});financeFeedback('Entry classification saved.');await loadFinance()}catch(err){kind.value=previous;financeFeedback(err.message,true)}};el.append(kind);
+   el.append(financeActionButton('Void',async()=>{if(!confirm('Void this expense/purchase? The audit log will retain a record.'))return;try{await api('finance?kind=expense&id='+encodeURIComponent(e.id),{method:'DELETE'});financeFeedback('Entry voided.');await loadFinance()}catch(err){financeFeedback(err.message,true)}}));expenses.append(el)}
+  if(!d.expenses.length)expenses.textContent='No expenses or purchases recorded for this month.';
+ }catch(e){financeFeedback('Could not load finance: '+e.message,true)}
+}
 document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>section(b.dataset.section));$('menu').onclick=()=>document.querySelector('.sidebar').classList.toggle('expanded');$('logout').onclick=()=>{clearSession();$('portal').hidden=true;$('signin').hidden=false;google?.accounts?.id?.disableAutoSelect?.();message('Signed out.');};$('search').oninput=renderOrders;$('paymentFilter').onchange=renderOrders;$('stageFilter').onchange=renderOrders;$('refreshOrders').onclick=loadOrders;
 $('productForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;try{await api('products',{method:'POST',body:new FormData(e.target)});e.target.reset();await loadProducts();message('Product published successfully.');productFeedback('Product published successfully. The form is clear for your next product.');productTop()}catch(x){message(x.message)}finally{btn.disabled=false}};
-$('expenseForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;try{await api('finance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))});e.target.reset();message('Expense saved.');await loadFinance()}catch(x){message(x.message)}finally{btn.disabled=false}};
-$('expenseForm').querySelector('[name="occurred_on"]').value=new Date().toLocaleDateString('en-CA');start();
+$('financeMonth').value=bruneiDate().slice(0,7);
+$('financeMonth').onchange=()=>{financeFeedback('');loadFinance()};
+$('financeExport').onclick=financeExport;
+$('jobCostForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;try{const data=Object.fromEntries(new FormData(e.target));await api('finance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'job_cost',...data})});const order=data.order_id;e.target.reset();e.target.querySelector('[name=occurred_on]').value=bruneiDate();financeFeedback('Job cost recorded successfully.');await loadFinance();$('costOrderSelect').value=order;financeTop()}catch(err){financeFeedback(err.message,true)}finally{btn.disabled=false}};
+$('expenseForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;try{const data=Object.fromEntries(new FormData(e.target));await api('finance',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'expense',...data})});e.target.reset();e.target.querySelector('[name=occurred_on]').value=bruneiDate();financeFeedback('Expense / purchase saved successfully.');await loadFinance();financeTop()}catch(err){financeFeedback(err.message,true)}finally{btn.disabled=false}};
+$('expenseForm').querySelector('[name=occurred_on]').value=bruneiDate();
+$('jobCostForm').querySelector('[name=occurred_on]').value=bruneiDate();
+start();
