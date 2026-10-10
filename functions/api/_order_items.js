@@ -1,5 +1,4 @@
 import {mergeCatalog,snapshot} from './_printing.js';
-import {recipeFromCatalog} from './_materials.js';
 import {getCatalog} from './_shared.js';
 
 export async function loadTrustedProducts(env){return mergeCatalog(await getCatalog(env))}
@@ -16,17 +15,17 @@ export function makeOrderItems(catalog,selected){
    for(const comp of p.components){const component=products.get(comp.id),units=Number(comp.quantity);if(!component||component.product_type==='bundle'||!Number.isInteger(units)||units<1)throw Error('Bundle component is unavailable');
     const snap=snapshot(component);if(snap.print_weight_g==null)throw Error('Bundle component lacks Creality estimates');
     grams+=snap.print_weight_g*units;minutes+=snap.print_minutes*units;cents+=snap.print_cost_cents*units;
-    materials.push(...recipeFromCatalog(component).filter(m=>m.kind==='filament').map(m=>({...m,quantity_mg:m.quantity_mg*units})));
+    // Material colour is chosen for this individual customer order in Admin.
+
    }
-   // Packaging and accessories are chosen per order, not inherited from bundle defaults.
-   materials=materials.filter(m=>m.kind==='filament');
+   // Bundle materials are chosen on the individual order, not the catalog bundle.
    print={print_weight_g:grams,print_minutes:minutes,print_cost_cents:cents};
    detail='bundle';
-  }else{materials=recipeFromCatalog(p).filter(m=>m.kind==='filament');print=snapshot(p);detail='single'}
+  }else{materials=[];print=snapshot(p);detail='single'}
   price=p.price===null?null:Math.round(Number(p.price)*100);
   if(price!==null&&(!Number.isSafeInteger(price)||price<0))throw Error('Invalid product price');
   if(price===null)unpriced=true;else total+=price*quantity;
-  lines.push({id,title:p.title,quantity,price_cents:price,...print,materials,product_type:detail,recipe_version:1});
+  lines.push({id,title:p.title,quantity,price_cents:price,...print,materials,product_type:detail,recipe_version:2});
  }
  if(total>100000000)throw Error('Order exceeds price limit');
  return {items:lines,total_cents:unpriced?null:total};

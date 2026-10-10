@@ -68,3 +68,15 @@
 .stock-purchase-total{grid-column:1/-1}
 #financePurchaseFields{background:#faf9ff;border:1px solid #e3dbee;border-radius:12px;padding:14px;margin:0 0 14px}
 @media(max-width:600px){.order-status-controls .save{width:100%}.order-extra-actions>*{flex:1 1 130px}.order .recipe-row{grid-template-columns:1fr}}
+
+/* V5: clear primary and secondary actions in each order, responsive material editor */
+.order .order-status-controls{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:end;margin-bottom:12px}
+.order .order-status-controls label{min-width:0;margin:0}.order .order-status-controls .save{grid-column:1/-1;width:100%;margin:0}
+.order .order-extra-actions{display:flex;flex-wrap:wrap;gap:9px;margin:12px 0}
+.order .order-extra-actions button{flex:1 1 120px;min-height:42px;min-width:0;border-radius:10px;border:1px solid #e0d8f2;padding:10px 12px;background:#f5f1ff;color:#5e3ba8;font-weight:700;cursor:pointer}
+.order .order-extra-actions button.primary{background:#7856e6;color:#fff;border-color:#7856e6}
+.order .extras-edit{border:1px solid #e8e0f5;border-radius:13px;background:#faf9ff;padding:15px;margin:14px 0}
+.order .order-estimate-items{display:grid;gap:10px;margin:12px 0}.order .order-estimate-item{background:white;border:1px solid #ede8f5;border-radius:10px;padding:10px}
+.order .order-estimate-item strong{display:block;margin-bottom:8px}
+.order .recipe-row{grid-template-columns:minmax(0,2fr) minmax(75px,1fr) auto}.order .recipe-row label{min-width:0;margin:0}.order .recipe-row select{width:100%}
+@media(max-width:700px){.order .recipe-row{grid-template-columns:1fr 95px auto}.order .order-status-controls{grid-template-columns:1fr 1fr}}

@@ -13,9 +13,8 @@ export async function onRequestPost({request,env}){
  const clean=[],ids=new Set();for(const c of components){const id=trim(c.id,80),quantity=Number(c.quantity);if(!id||ids.has(id)||!Number.isInteger(quantity)||quantity<1||quantity>100)return invalid('Component must be unique with quantity 1–100');ids.add(id);clean.push({id,quantity})}
  try{
   const catalog=await getCatalog(env),all=mergeCatalog(catalog),lookup=new Map(all.map(p=>[p.id,p]));let first=null;
-  for(const c of clean){const p=lookup.get(c.id);if(!p||p.product_type==='bundle'||p.visible===false||snapshot(p).print_weight_g===null||!Array.isArray(p.materials)||!p.materials.length)return invalid('Each bundle component must have Creality details and assigned materials');if(!first)first=p}
-  // Extra box, bow, or other accessories added once per bundle, on top of component recipes.
-  // Boxes and accessories are picked per individual customer order, never required in a bundle.
+  for(const c of clean){const p=lookup.get(c.id);if(!p||p.product_type==='bundle'||p.visible===false||snapshot(p).print_weight_g===null)return invalid('Each bundle component must have Creality weight/time/cost configured');if(!first)first=p}
+  // Optional boxes, plastic and accessories belong to each customer order.
   const extras=[];
   if(catalog.length>=200)return invalid('Catalog limit reached');
   const id='up-'+crypto.randomUUID();const entry={id,title,description,price:Number(price),category:'Gifts',image:first.image,visible:true,product_type:'bundle',components:clean,materials:extras,print_weight_g:null,print_minutes:null,print_cost_cents:null};

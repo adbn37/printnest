@@ -4,10 +4,18 @@ import {orderExtras} from './_order_extras.js';
 const today=()=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Brunei'}).format(new Date());
 const audit=(db,email,action,id,detail)=>db.prepare('INSERT INTO portal_audit(actor_email,action,entity_id,detail) VALUES(?,?,?,?)').bind(email,action,id,JSON.stringify(detail));
 export async function inspectOrderMaterials(db,order){
- const lines=JSON.parse(order.items_json),missing=lines.filter(l=>l.recipe_version!==1||!Array.isArray(l.materials)||l.materials.length===0||l.print_weight_g==null).map(l=>l.title);
- const selectedExtras=await orderExtras(db,order.id);
- const check=await checkAvailability(db,selectedExtras.length?[...lines,{quantity:1,materials:selectedExtras}]:lines);
- return {...check,missing_products:missing,available:missing.length===0&&check.available};
+ const lines=JSON.parse(order.items_json),estimate=summarizeItems(lines);
+ const materials=await orderExtras(db,order.id);
+ const filament=materials.filter(m=>m.kind==='filament');
+ const grams=filament.reduce((n,m)=>n+Number(m.quantity_mg||0),0);
+ const problems=[];
+ if(!estimate.complete)problems.push('Fill in Creality weight, time and cost for every order item');
+ if(!filament.length)problems.push('Choose a filament colour for this specific order');
+ if(estimate.complete&&filament.length&&grams!==estimate.weight_mg)problems.push('Filament grams: '+(grams/1000).toFixed(3)+' g; order needs '+(estimate.weight_mg/1000).toFixed(3)+' g');
+ // Never fall back to an old product recipe or silently pick a default roll.
+ if(problems.length)return {available:false,allocations:[],shortages:[],missing_products:problems,stock_cost_cents:0};
+ const check=await checkAvailability(db,[{quantity:1,materials}]);
+ return {...check,missing_products:[],available:check.available};
 }
 export async function saveOrderStatusWithProduction(db,order,{payment,stage,email}){
  const update=(s)=>db.prepare("UPDATE orders SET payment_status=?,fulfillment_status=?,verified_at=CASE WHEN ?='verified' AND payment_status!='verified' THEN datetime('now') WHEN ?!='verified' THEN NULL ELSE verified_at END WHERE id=?").bind(payment,s,payment,payment,order.id);

@@ -1,7 +1,6 @@
 import {json,getCatalog,putCatalog} from '../_shared.js';
 import {guard,invalid} from './_auth.js';
 import {isSeed,mergeCatalog,parsePrintFields} from '../_printing.js';
-import {validateRecipe} from '../_materials.js';
 const clean=(v,max=100)=>String(v??'').trim().slice(0,max);
 const categories=['Clickers','Keychains','Gifts'];
 const extensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'};
@@ -33,7 +32,7 @@ export async function onRequestPost({request,env}){
  let data;try{data=await request.formData()}catch{return invalid('Invalid product form')}
  const input=productInput(data);if(input.error)return invalid(input.error);
  const photo=data.get('image'),check=await validatePhoto(photo);if(check.error)return invalid(check.error);
- let materials;try{if(JSON.parse(String(data.get('materials_json')||'[]')).some(m=>m.kind!=='filament'))return invalid('Product materials must contain only filament; select boxes/accessories per order');materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}
+ const materials=[]; // Stock colour and optional packaging are selected in Orders.
  let key;
  try{const list=await getCatalog(env);if(list.length>=200)return invalid('Product limit reached');const id='up-'+crypto.randomUUID();key='images/'+id+'.'+check.ext;
   await env.PRINTNEST_BUCKET.put(key,photo.stream(),{httpMetadata:{contentType:photo.type}});
@@ -51,8 +50,7 @@ export async function onRequestPatch({request,env}){
   const list=await getCatalog(env),merged=mergeCatalog(list),current=merged.find(p=>p.id===id);
   if(!current)return invalid('Product not found',404);
   const file=data.get('image');if(file?.size){const check=await validatePhoto(file);if(check.error)return invalid(check.error);newKey='images/'+crypto.randomUUID()+'.'+check.ext;await env.PRINTNEST_BUCKET.put(newKey,file.stream(),{httpMetadata:{contentType:file.type}})}
-  let materials=Array.isArray(current.materials)?current.materials:[];
-  if(current.product_type!=='bundle'){try{if(JSON.parse(String(data.get('materials_json')||'[]')).some(m=>m.kind!=='filament'))return invalid('Product materials must contain only filament; add accessories in Orders');materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}}
+  const materials=[]; // Clear old product recipes; individual orders own all material choices.
   const updated={...current,...input,materials,visible:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};
   const oldKey=current.product_type==='bundle'?null:(current.image?.startsWith('/images/')?current.image.slice(1):null);
   const index=list.findIndex(p=>p.id===id);if(index>=0)list[index]=updated;else list.push(updated);
