@@ -1,0 +1,13 @@
+import {json,getCatalog,putCatalog} from '../_shared.js';import {guard,invalid} from './_auth.js';
+export async function onRequestGet({request,env}){const g=await guard(request,env);if(g.response)return g.response;try{return json({products:await getCatalog(env)})}catch{return json({products:[],warning:'Product storage requires PRINTNEST_BUCKET'})}}
+export async function onRequestPost({request,env}){
+ const g=await guard(request,env);if(g.response)return g.response;if(!env.PRINTNEST_BUCKET)return invalid('Add an R2 binding named PRINTNEST_BUCKET to publish products',503);
+ let form;try{form=await request.formData()}catch{return invalid('Invalid form')}
+ const title=String(form.get('title')||'').trim().slice(0,100),description=String(form.get('description')||'').trim().slice(0,350),category=String(form.get('category')||''),raw=Number(form.get('price')),file=form.get('image');
+ if(!title||!['Clickers','Keychains','Gifts'].includes(category)||!Number.isFinite(raw)||raw<0||!file?.size)return invalid('Complete all product fields');
+ if(file.size>5*1024*1024)return invalid('Maximum photo size 5 MB',413);
+ const extensions={'image/jpeg':'jpg','image/png':'png','image/webp':'webp'};if(!extensions[file.type])return invalid('Use JPG, PNG or WebP');
+ const bytes=new Uint8Array(await file.slice(0,16).arrayBuffer());const valid=file.type==='image/png'?bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71:file.type==='image/jpeg'?bytes[0]===255&&bytes[1]===216:String.fromCharCode(...bytes.slice(0,4))==='RIFF'&&String.fromCharCode(...bytes.slice(8,12))==='WEBP';if(!valid)return invalid('Invalid image signature');
+ try{const catalog=await getCatalog(env);if(catalog.length>=200)return invalid('Product limit reached');const id='up-'+crypto.randomUUID(),key='images/'+id+'.'+extensions[file.type];await env.PRINTNEST_BUCKET.put(key,file.stream(),{httpMetadata:{contentType:file.type}});catalog.push({id,title,description,category,price:Math.round(raw*100)/100,image:'/'+key});await putCatalog(env,catalog);return json({ok:true,id},201)}catch{return invalid('Upload failed',500)}
+}
+export async function onRequestDelete({request,env}){const g=await guard(request,env,{master:true});if(g.response)return g.response;if(!env.PRINTNEST_BUCKET)return invalid('Product storage unavailable',503);const id=new URL(request.url).searchParams.get('id');if(!id?.startsWith('up-'))return invalid('Invalid product');try{const list=await getCatalog(env),p=list.find(x=>x.id===id);if(!p)return invalid('Not found',404);await putCatalog(env,list.filter(x=>x.id!==id));if(p.image?.startsWith('/images/'))await env.PRINTNEST_BUCKET.delete(p.image.slice(1));return json({ok:true})}catch{return invalid('Could not delete product',500)}}
