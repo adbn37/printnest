@@ -6,3 +6,10 @@
 .simple-row:last-child{border-bottom:0}.simple-head{font-size:11px;color:#777089;letter-spacing:.04em;font-weight:700;text-transform:uppercase;background:#faf8ff;border-radius:9px}.status-text{text-transform:capitalize;color:#6549bd;font-weight:700}.empty-row{padding:20px 0;color:#7c768e}.simple-row button{justify-self:end;border:1px solid #ded8ec;background:#fff;border-radius:9px;padding:9px 12px}.order .toolbar{align-items:end}.order .toolbar label{min-width:130px}.order .toolbar button{align-self:end}.order .preview{max-width:600px}.order .preview img{display:block;border-radius:12px;border:1px solid #eee}.order-grid .panel{margin:0}
 @media(max-width:950px){.simple-row{grid-template-columns:minmax(140px,1.3fr) minmax(85px,1fr);gap:7px}.simple-head{display:none}}
 @media(max-width:800px){.sidebar.open{display:flex}.sidebar{box-shadow:15px 0 50px #10102544}.toolbar input{min-width:100%;width:100%}.toolbar select{flex:1}.stats{gap:9px}.stats article{padding:15px}.stats strong{font-size:23px}.simple-row button{justify-self:start}}
+
+/* Product save UX: clear feedback and tidy editable cards */
+.product-feedback{margin:0 0 16px;padding:14px 16px;border:1px solid #c9ddd3;background:#f6fbf8;border-radius:12px;color:#195943;font-weight:700}
+.product-feedback.is-error{border-color:#e9c6c6;background:#fff8f8;color:#8a2b2b}
+.product-summary{font-weight:700;margin:4px 0 12px;overflow-wrap:anywhere}
+.product-edit-toggle{border:1px solid #dcd6ed;background:#fff;color:#5844b4;padding:10px 14px;border-radius:10px;font-weight:700;cursor:pointer;margin:0 0 14px}
+.product-editor[hidden]{display:none!important}
