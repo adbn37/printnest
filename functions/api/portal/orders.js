@@ -19,5 +19,5 @@ export async function onRequestPatch({request,env}){
   if(!['developer','master_admin'].includes(g.user.role)&&payment!==order.payment_status)return invalid('Only master admin may change payment status',403);
   const result=await saveOrderStatusWithProduction(db,order,{payment,stage,email:g.user.email});
   return json({ok:true,...result});
- }catch{return invalid('Could not save order or production. Check production migration and default roll configuration.',500)}
+ }catch{return invalid('Production could not start. Stock may have changed; check materials and retry. Confirm V3 migration is installed.',409)}
 }

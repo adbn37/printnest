@@ -42,3 +42,13 @@
 .inventory-item .stock-controls{display:flex;flex-wrap:wrap;gap:8px}
 .inventory-item .stock-controls button{padding:9px 12px}
 .inventory-item .stock-controls .stock-use{background:#fff7f5;color:#9a4e30;border-color:#f0d4c4}
+
+/* Product recipes, bundle editor, stock checks and manual order entry */
+.recipe-fields{border:1px solid #e7def1;border-radius:12px;background:#fdfbff;padding:14px;margin:16px 0}
+.recipe-fields legend{font-weight:750;color:#5b43a9;padding:0 6px}.recipe-stack{display:grid;gap:9px;margin:10px 0}
+.recipe-row{display:grid;grid-template-columns:minmax(160px,2fr) minmax(85px,1fr) auto;gap:9px;align-items:end;padding:9px;background:#faf9ff;border-radius:10px}
+.recipe-row label{margin:0}.recipe-row button,.secondary-action{background:#f5f1ff;color:#6743ae;border:1px solid #e1d5fa;border-radius:9px;padding:11px;font-weight:700}
+.material-check{margin:12px 0;border:1px solid #e2d5f4;border-radius:9px;padding:12px;line-height:1.5;background:#fbf9ff;white-space:pre-line}
+.material-check.is-short{background:#fff4f3;border-color:#e7b5b5;color:#8e3333}
+.item-short{color:#b33843;font-weight:800}.item-low{color:#9a6b07;font-weight:700}
+@media(max-width:650px){.recipe-row{grid-template-columns:1fr 92px auto}.recipe-row select{width:100%}}

@@ -1,6 +1,7 @@
 import {json,getCatalog,putCatalog} from '../_shared.js';
 import {guard,invalid} from './_auth.js';
 import {isSeed,mergeCatalog,parsePrintFields} from '../_printing.js';
+import {validateRecipe} from '../_materials.js';
 const clean=(v,max=100)=>String(v??'').trim().slice(0,max);
 const categories=['Clickers','Keychains','Gifts'];
 const extensions={'image/png':'png','image/jpeg':'jpg','image/webp':'webp'};
@@ -32,10 +33,11 @@ export async function onRequestPost({request,env}){
  let data;try{data=await request.formData()}catch{return invalid('Invalid product form')}
  const input=productInput(data);if(input.error)return invalid(input.error);
  const photo=data.get('image'),check=await validatePhoto(photo);if(check.error)return invalid(check.error);
+ let materials;try{materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}
  let key;
  try{const list=await getCatalog(env);if(list.length>=200)return invalid('Product limit reached');const id='up-'+crypto.randomUUID();key='images/'+id+'.'+check.ext;
   await env.PRINTNEST_BUCKET.put(key,photo.stream(),{httpMetadata:{contentType:photo.type}});
-  list.push({id,...input,visible:true,image:'/'+key});
+  list.push({id,...input,materials,product_type:'single',visible:true,image:'/'+key});
   await putCatalog(env,list);return json({ok:true,id},201)
  }catch{if(key)await env.PRINTNEST_BUCKET.delete(key).catch(()=>{});return invalid('Could not publish product',500)}
 }
@@ -49,8 +51,10 @@ export async function onRequestPatch({request,env}){
   const list=await getCatalog(env),merged=mergeCatalog(list),current=merged.find(p=>p.id===id);
   if(!current)return invalid('Product not found',404);
   const file=data.get('image');if(file?.size){const check=await validatePhoto(file);if(check.error)return invalid(check.error);newKey='images/'+crypto.randomUUID()+'.'+check.ext;await env.PRINTNEST_BUCKET.put(newKey,file.stream(),{httpMetadata:{contentType:file.type}})}
-  const updated={...current,...input,visible:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};
-  const oldKey=current.image?.startsWith('/images/')?current.image.slice(1):null;
+  let materials=Array.isArray(current.materials)?current.materials:[];
+  if(current.product_type!=='bundle'){try{materials=await validateRecipe(env.PRINTNEST_DB,JSON.parse(String(data.get('materials_json')||'[]')),{printWeightG:input.print_weight_g,requireFilament:input.print_weight_g!==null})}catch(e){return invalid(e.message)}}
+  const updated={...current,...input,materials,visible:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};
+  const oldKey=current.product_type==='bundle'?null:(current.image?.startsWith('/images/')?current.image.slice(1):null);
   const index=list.findIndex(p=>p.id===id);if(index>=0)list[index]=updated;else list.push(updated);
   try{await putCatalog(env,list)}catch(e){if(newKey)await env.PRINTNEST_BUCKET.delete(newKey).catch(()=>{});throw e}
   if(newKey&&oldKey)await env.PRINTNEST_BUCKET.delete(oldKey).catch(()=>{});
@@ -62,6 +66,6 @@ export async function onRequestDelete({request,env}){
  if(!env.PRINTNEST_BUCKET)return invalid('Product storage unavailable',503);
  const id=clean(new URL(request.url).searchParams.get('id'),80);if(!id.startsWith('up-'))return invalid('Only uploaded products can be deleted');
  try{const list=await getCatalog(env),p=list.find(x=>x.id===id);if(!p)return invalid('Not found',404);
-  await putCatalog(env,list.filter(x=>x.id!==id));if(p.image?.startsWith('/images/'))await env.PRINTNEST_BUCKET.delete(p.image.slice(1)).catch(()=>{});return json({ok:true});
+  await putCatalog(env,list.filter(x=>x.id!==id));if(p.product_type!=='bundle'&&p.image?.startsWith('/images/'))await env.PRINTNEST_BUCKET.delete(p.image.slice(1)).catch(()=>{});return json({ok:true});
  }catch{return invalid('Could not delete product',500)}
 }

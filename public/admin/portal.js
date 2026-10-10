@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 let jwt='',me=null,orders=[],products=[];const bnd=c=>'BND '+((Number(c)||0)/100).toFixed(2);
 function message(s){$('notice').textContent=s;$('loginMessage').textContent=s}async function api(path,options={}){const r=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+jwt,...options.headers},cache:'no-store'});let data;try{data=await r.json()}catch{throw Error('Invalid response ('+r.status+')')}if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data}
-function section(name){document.querySelectorAll('.section').forEach(x=>x.hidden=x.id!==name);document.querySelectorAll('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===name));$('sectionTitle').textContent=name[0].toUpperCase()+name.slice(1);document.querySelector('.sidebar').classList.remove('open');if(name==='orders')renderOrders();if(name==='products')loadProducts();if(name==='inventory')loadInventory();if(name==='finance')loadFinance()}
+function section(name){document.querySelectorAll('.section').forEach(x=>x.hidden=x.id!==name);document.querySelectorAll('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===name));$('sectionTitle').textContent=name[0].toUpperCase()+name.slice(1);document.querySelector('.sidebar').classList.remove('open');if(name==='orders'){renderOrders();loadOrderProducts()}if(name==='products')loadProducts();if(name==='inventory')loadInventory();if(name==='finance')loadFinance()}
 const SESSION_KEY='printnest_google_credential';
 function clearSession(){sessionStorage.removeItem(SESSION_KEY);jwt='';me=null;orders=[]}
 async function signIn(credential){
@@ -34,25 +34,101 @@ async function start(){
 }
 async function loadOrders(){try{const d=await api('orders');orders=d.orders||[];$('statOrders').textContent=orders.length;$('statReview').textContent=orders.filter(o=>o.payment_status==='awaiting_review').length;$('statPrinting').textContent=orders.filter(o=>o.fulfillment_status==='printing').length;$('statDone').textContent=orders.filter(o=>o.fulfillment_status==='completed').length;$('recentOrders').innerHTML='<div class="simple-row simple-head"><span>Order</span><span>Customer</span><span>Amount</span><span>Payment</span></div>'+ (orders.slice(0,8).map(o=>`<div class="simple-row"><strong>${esc(o.id)}</strong><span>${esc(o.customer_name)}</span><span>${o.total_cents===null?'Quote needed':bnd(o.total_cents)}</span><span class="status-text">${esc(o.payment_status.replaceAll('_',' '))}</span></div>`).join('')||'<div class="empty-row">No orders yet</div>');renderOrders();}catch(e){message(e.message)}}
 function opt(values,current){return values.map(v=>`<option value="${v}" ${v===current?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}
-function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();for(const o of list){const el=document.createElement('article');el.className='panel order';el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','printing','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="preview" hidden></div>`;
- el.querySelector('.save').onclick=async()=>{if(el.querySelector('.pay').value==='verified'&&o.payment_status!=='verified'&&!confirm('Have you checked the actual bank transaction? A screenshot alone is NOT proof of payment.'))return;try{const saved=await api('orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id,payment_status:el.querySelector('.pay').value,fulfillment_status:el.querySelector('.stage').value})});await loadOrders();message(saved.registered?'Order saved. Creality estimates recorded once; stock must be updated manually.':saved.missing_print_details?'Order saved. This order has no complete Creality snapshot, so add cost manually if needed.':'Order status saved; no duplicate printing cost was recorded.')}catch(e){message(e.message)}};
+function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();for(const o of list){const el=document.createElement('article');el.className='panel order';el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','awaiting_materials','printing','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button><button class="stock-check" type="button">Check materials</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="material-check" role="status" hidden></div><div class="preview" hidden></div>`;
+ el.querySelector('.stock-check').onclick=async()=>{const out=el.querySelector('.material-check');out.hidden=false;out.textContent='Checking stock…';
+  try{const d=await api('material-check?id='+encodeURIComponent(o.id));out.classList.toggle('is-short',!d.available);
+   out.textContent=d.started?'Production already recorded. Stock was deducted when this order entered Printing.':d.available?'All materials available — ready to start Printing.':
+    ['Cannot start printing yet.',...(d.missing_products?.length?['Missing product material recipes: '+d.missing_products.join(', ')]:[]),...(d.shortages||[]).map(x=>x.label+': need '+x.required+' '+x.unit+', available '+x.available+' '+x.unit+', shortage '+x.shortfall+' '+x.unit)].join('\n')}
+  catch(err){out.classList.add('is-short');out.textContent=err.message}
+ };
+ el.querySelector('.save').onclick=async()=>{if(el.querySelector('.pay').value==='verified'&&o.payment_status!=='verified'&&!confirm('Have you checked the actual bank transaction? A screenshot alone is NOT proof of payment.'))return;try{const saved=await api('orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id,payment_status:el.querySelector('.pay').value,fulfillment_status:el.querySelector('.stage').value})});await loadOrders();message(saved.registered?'Order saved. Material stock deducted once; Creality cost posted to Finance.':saved.blocked?'Order moved to Awaiting materials. '+(saved.missing_products?.length?'Configure materials for '+saved.missing_products.join(', ')+'. ':'')+(saved.shortages||[]).map(x=>x.label+' short '+x.shortfall+' '+x.unit).join('; '):'Order status saved. No duplicate stock deduction.')}catch(e){message(e.message)}};
  if(o.receipt_key)el.querySelector('.receipt').onclick=async()=>{const out=el.querySelector('.preview');if(!out.hidden){out.hidden=true;return}try{const r=await fetch('/api/portal/receipt?id='+encodeURIComponent(o.id),{headers:{Authorization:'Bearer '+jwt},cache:'no-store'});if(!r.ok){let d=await r.json();throw Error(d.error||r.status)}const blob=await r.blob(),url=URL.createObjectURL(blob);out.replaceChildren();if(blob.type.startsWith('image/')){const img=document.createElement('img');img.src=url;img.alt='Receipt';out.append(img)}else if(blob.type==='application/pdf'){const frame=document.createElement('iframe');frame.src=url;frame.title='Receipt';out.append(frame)}const a=document.createElement('a');a.textContent='Download proof';a.download=o.id+(blob.type==='application/pdf'?'.pdf':'.png');a.href=url;out.append(a);out.hidden=false}catch(e){message('Receipt: '+e.message)}};
  $('orderList').append(el)}if(!list.length)$('orderList').textContent='No matching orders.'}
+// PrintNest V3: selected material recipes, order builder, bundles.
+let materialSources={rolls:[],items:[]};
+let catalogOptions=[];
+function inlineStatus(id,text,error=false){const el=$(id);el.hidden=!text;el.textContent=text;el.classList.toggle('is-error',error)}
+async function loadProductSources(){
+ const [r,s]=await Promise.all([api('production'),api('inventory')]);
+ materialSources={rolls:r.rolls||[],items:s.items||[]};
+}
+function groupedFilament(){const map=new Map();for(const r of materialSources.rolls){const k=JSON.stringify([r.material,r.color]);if(!map.has(k))map.set(k,{material:r.material,color:r.color,remaining:0});map.get(k).remaining+=Number(r.remaining_mg||0)}return [...map.entries()]}
+function newSelect(options){const select=document.createElement('select');for(const [v,name] of options){const el=document.createElement('option');el.value=v;el.textContent=name;select.append(el)}return select}
+function recipeRow(holder,kind,prefill=null){
+ const div=document.createElement('div');div.className='recipe-row';div.dataset.kind=kind;
+ const label=document.createElement('label');label.textContent=kind==='filament'?'Filament colour':'Accessory / packaging';
+ const options=kind==='filament'?groupedFilament().map(([k,v])=>[k,v.material+' · '+v.color+' ('+(v.remaining/1000).toFixed(1)+' g left)']):materialSources.items.map(i=>[i.id,i.name+' · '+i.quantity+' '+i.unit+' left']);
+ const select=newSelect([['','Select stock item'],...options]);select.className='recipe-stock';select.required=true;
+ if(prefill){select.value=kind==='filament'?JSON.stringify([prefill.material,prefill.color]):prefill.item_id;
+  if(!select.value){const key=kind==='filament'?JSON.stringify([prefill.material,prefill.color]):prefill.item_id;const opt=document.createElement('option');opt.value=key;opt.textContent=(prefill.name||prefill.material+' '+prefill.color)+' (not currently stocked)';select.append(opt);select.value=key;}
+ }
+ label.append(select);
+ const qLabel=document.createElement('label');qLabel.textContent=kind==='filament'?'Grams per unit':'Qty per unit';
+ const qty=document.createElement('input');qty.type='number';qty.className='recipe-qty';qty.required=true;qty.step=kind==='filament'?'0.001':'1';qty.min=kind==='filament'?'0.001':'1';qty.max=kind==='filament'?'100000':'100000';qty.placeholder=kind==='filament'?'g':'pcs';
+ if(prefill)qty.value=kind==='filament'?Number(prefill.quantity_mg/1000).toFixed(3):prefill.quantity_units;qLabel.append(qty);
+ const del=document.createElement('button');del.type='button';del.textContent='Remove';del.onclick=()=>div.remove();
+ div.append(label,qLabel,del);holder.append(div);return div;
+}
+function collectRecipe(root){const materials=[];for(const row of root.querySelectorAll('.recipe-row')){
+ const kind=row.dataset.kind,choice=row.querySelector('.recipe-stock').value,qty=row.querySelector('.recipe-qty').value;
+ if(!choice||!qty)throw Error('Select every material and enter its quantity');
+ if(kind==='filament'){const [material,color]=JSON.parse(choice);materials.push({kind,material,color,grams:qty})}
+ else materials.push({kind:'item',item_id:choice,quantity_units:qty});
+ }return materials}
+function makeRecipeEditor(form,initial=[]){
+ const container=document.createElement('fieldset');container.className='recipe-fields';
+ const legend=document.createElement('legend');legend.textContent='Materials required for one product';
+ const hint=document.createElement('p');hint.className='muted';hint.textContent='Assign filament grams matching the Creality weight; add any keychain rings, boxes or other supplies.';
+ const rows=document.createElement('div');rows.className='recipe-stack';rows.dataset.recipeRows='true';
+ const addFilament=document.createElement('button');addFilament.type='button';addFilament.className='secondary-action';addFilament.textContent='+ Filament';addFilament.onclick=()=>recipeRow(rows,'filament');
+ const addItem=document.createElement('button');addItem.type='button';addItem.className='secondary-action';addItem.textContent='+ Accessory / packaging';addItem.onclick=()=>recipeRow(rows,'item');
+ container.append(legend,hint,rows,addFilament,document.createTextNode(' '),addItem);
+ for(const item of initial)recipeRow(rows,item.kind,item);
+ if(form.id==='productForm')$('newProductMaterials').append(container);else {const visible=form.querySelector('label.toggle-row');form.insertBefore(container,visible)}
+ return rows;
+}
+function dropdownOrderRow(holder,{bundleOnly=false}={}){
+ const row=document.createElement('div');row.className='recipe-row';
+ const label=document.createElement('label');label.textContent='Product';
+ const values=catalogOptions.filter(p=>p.visible!==false&&(!bundleOnly||p.product_type!=='bundle')).map(p=>[p.id,p.title+(p.price===null?' · Quote required':' · BND '+Number(p.price).toFixed(2))]);
+ const select=newSelect([['','Select product'],...values]);select.required=true;select.className='product-choice';label.append(select);
+ const qtyLabel=document.createElement('label');qtyLabel.textContent='Quantity';const qty=document.createElement('input');qty.type='number';qty.min='1';qty.max='100';qty.value='1';qty.required=true;qty.className='product-qty';qtyLabel.append(qty);
+ const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>row.remove();row.append(label,qtyLabel,remove);holder.append(row);return row;
+}
+function productRows(holder){const result=[];for(const row of holder.querySelectorAll('.recipe-row')){const id=row.querySelector('.product-choice').value,quantity=Number(row.querySelector('.product-qty').value);if(!id||!Number.isInteger(quantity)||quantity<1||quantity>100)throw Error('Select product and valid quantity');result.push({id,quantity})}if(!result.length)throw Error('Add at least one product');return result}
+async function loadOrderProducts(){try{const d=await api('products');catalogOptions=d.products||[];if(!$('manualLines').childElementCount)dropdownOrderRow($('manualLines'));else{const old=productRowsOptional($('manualLines'));$('manualLines').replaceChildren();for(const item of old){const row=dropdownOrderRow($('manualLines'));row.querySelector('.product-choice').value=item.id;row.querySelector('.product-qty').value=item.quantity}}
+ }catch(e){inlineStatus('manualFeedback','Products unavailable: '+e.message,true)}}
+function productRowsOptional(holder){return [...holder.querySelectorAll('.recipe-row')].map(r=>({id:r.querySelector('.product-choice').value,quantity:r.querySelector('.product-qty').value}))}
+function refreshBundleRows(){const holder=$('bundleLines'),old=productRowsOptional(holder);holder.replaceChildren();for(const item of old.length?old:[{}]){const row=dropdownOrderRow(holder,{bundleOnly:true});row.querySelector('.product-choice').value=item.id||'';row.querySelector('.product-qty').value=item.quantity||1}}
+$('manualAddLine').onclick=()=>dropdownOrderRow($('manualLines'));
+$('bundleAddLine').onclick=()=>dropdownOrderRow($('bundleLines'),{bundleOnly:true});
+$('bundleAddExtra').onclick=()=>recipeRow($('bundleExtras'),'item');
+$('manualOrderForm').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,btn=form.querySelector('[type=submit]');btn.disabled=true;
+ try{const fields=Object.fromEntries(new FormData(form));const items=productRows($('manualLines'));const out=await api('manual-orders',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...fields,items})});form.reset();$('manualLines').replaceChildren();dropdownOrderRow($('manualLines'));inlineStatus('manualFeedback','Order '+out.id+' created as Unpaid / New.');await loadOrders()}
+ catch(err){inlineStatus('manualFeedback',err.message,true)}finally{btn.disabled=false}
+};
+$('bundleForm').onsubmit=async e=>{e.preventDefault();const form=e.currentTarget,btn=form.querySelector('[type=submit]');btn.disabled=true;
+ try{const fields=Object.fromEntries(new FormData(form));const components=productRows($('bundleLines'));const extras=collectRecipe($('bundleExtras'));
+ await api('bundles',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...fields,components,extras})});form.reset();$('bundleLines').replaceChildren();$('bundleExtras').replaceChildren();inlineStatus('bundleFeedback','Bundle created successfully.');await loadProducts()}
+ catch(err){inlineStatus('bundleFeedback',err.message,true)}finally{btn.disabled=false}
+};
+
 function printingInputs(p={}){const w=p.print_weight_g??'',t=p.print_minutes??'',c=p.print_cost_cents==null?'':(p.print_cost_cents/100).toFixed(2);return `<fieldset class="creality-fields"><legend>Creality print estimates (internal)</legend><p class="muted">Copy the values from the Creality app. Leave all three blank if unknown.</p><div class="creality-grid"><label>Weight (g)<input name="print_weight_g" type="number" step="0.001" min="0.001" value="${esc(w)}" placeholder="g"></label><label>Time (minutes)<input name="print_minutes" type="number" step="1" min="1" value="${esc(t)}" placeholder="minutes"></label><label>Cost (BND)<input name="print_cost" type="number" step="0.01" min="0" value="${esc(c)}" placeholder="BND"></label></div></fieldset>`}
 function printingSummary(p){return p.print_weight_g!=null&&p.print_minutes!=null&&p.print_cost_cents!=null?`${p.print_weight_g} g · ${p.print_minutes} min · ${bnd(p.print_cost_cents)} estimated cost`:'Creality details not set'}
 function productFeedback(text,isError=false){const el=$('productFeedback');if(!el)return;el.hidden=!text;el.textContent=text;el.classList.toggle('is-error',isError)}
 function productTop(){const heading=$('products');if(heading)heading.scrollIntoView({behavior:'smooth',block:'start'})}
 async function loadProducts(){
  try{
-  const d=await api('products');products=d.products||[];
+  const [d]=await Promise.all([api('products'),loadProductSources()]);products=d.products||[];catalogOptions=products;refreshBundleRows();
   const holder=$('productList');holder.replaceChildren();if(d.warning)message(d.warning);
   if(!products.length){holder.textContent='No products found.';return}
   for(const p of products){
    const card=document.createElement('article');card.className='panel';
    const form=document.createElement('form');form.className='product-editor';form.hidden=true;
-   form.innerHTML=`<h3>${esc(p.title)}</h3><div class="fields"><label>Title<input name="title" value="${esc(p.title)}" required maxlength="100"></label><label>Price (BND)<input name="price" type="number" step="0.01" min="0" value="${p.price===null?'':Number(p.price).toFixed(2)}" ${p.id.startsWith('up-')?'required':''}></label><label>Category<select name="category"><option>Clickers</option><option>Keychains</option><option>Gifts</option></select></label><label>Replace photo (optional)<input name="image" type="file" accept="image/png,image/jpeg,image/webp"></label></div><label>Description<textarea name="description" maxlength="350" rows="2">${esc(p.description||'')}</textarea></label>${printingInputs(p)}<label class="toggle-row"><input name="visible" type="checkbox" ${p.visible===false?'':'checked'}> Visible in storefront</label><div class="toolbar"><button class="primary" type="submit">Save product</button><button type="button" class="remove-product">Delete</button></div>`;
+   form.innerHTML=`<h3>${esc(p.title)}</h3><div class="fields"><label>Title<input name="title" value="${esc(p.title)}" required maxlength="100"></label><label>Price (BND)<input name="price" type="number" step="0.01" min="0" value="${p.price===null?'':Number(p.price).toFixed(2)}" ${p.id.startsWith('up-')?'required':''}></label><label>Category<select name="category"><option>Clickers</option><option>Keychains</option><option>Gifts</option></select></label><label>Replace photo (optional)<input name="image" type="file" accept="image/png,image/jpeg,image/webp"></label></div><label>Description<textarea name="description" maxlength="350" rows="2">${esc(p.description||'')}</textarea></label>${p.product_type==='bundle'?'<p class="muted">Bundle uses its component printing estimates. To change components, recreate this bundle.</p>':printingInputs(p)}<label class="toggle-row"><input name="visible" type="checkbox" ${p.visible===false?'':'checked'}> Visible in storefront</label><div class="toolbar"><button class="primary" type="submit">Save product</button><button type="button" class="remove-product">Delete</button></div>`;
    form.querySelector('[name=category]').value=p.category;
-   form.onsubmit=async e=>{e.preventDefault();const btn=form.querySelector('[type=submit]');btn.disabled=true;try{const body=new FormData(form);body.set('id',p.id);body.set('visible',String(form.querySelector('[name=visible]').checked));await api('products',{method:'PATCH',body});await loadProducts();message('Product saved successfully.');productFeedback('Product saved successfully.');productTop()}catch(e){message(e.message);productFeedback('Could not save product: '+e.message,true)}finally{btn.disabled=false}};
+   if(p.product_type!=='bundle')makeRecipeEditor(form,Array.isArray(p.materials)?p.materials:[]);
+   form.onsubmit=async e=>{e.preventDefault();const btn=form.querySelector('[type=submit]');btn.disabled=true;try{const body=new FormData(form);body.set('id',p.id);body.set('visible',String(form.querySelector('[name=visible]').checked));if(p.product_type!=='bundle')body.set('materials_json',JSON.stringify(collectRecipe(form)));await api('products',{method:'PATCH',body});await loadProducts();message('Product saved successfully.');productFeedback('Product saved successfully.');productTop()}catch(e){message(e.message);productFeedback('Could not save product: '+e.message,true)}finally{btn.disabled=false}};
    form.querySelector('.remove-product').onclick=async()=>{if(!confirm('Delete '+p.title+'? Existing orders remain in history.'))return;try{await api('products?id='+encodeURIComponent(p.id),{method:'DELETE'});message('Product removed.');await loadProducts()}catch(e){message(e.message)}};
    const image=document.createElement('img');image.src=p.image;image.alt=p.title;image.loading='lazy';image.style.cssText='max-width:140px;max-height:140px;object-fit:cover;border-radius:12px;margin-bottom:12px';
    const summary=document.createElement('div');summary.className='product-summary';summary.textContent=p.title+' · '+(p.price===null?'Quote needed':bnd(Math.round(p.price*100)))+(p.visible===false?' · Hidden':'')+' · '+printingSummary(p);if(!p.id.startsWith('up-'))form.querySelector('.remove-product').hidden=true;const toggle=document.createElement('button');toggle.type='button';toggle.className='product-edit-toggle';toggle.textContent='Edit product';toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'Edit product':'Close editor'};card.append(image,summary,toggle,form);holder.append(card)
@@ -75,7 +151,7 @@ async function loadInventory(){
   for(const roll of d.rolls){
    const card=document.createElement('article');card.className='inventory-item';
    const content=document.createElement('div');content.className='inventory-item-content';
-   const title=document.createElement('strong');title.textContent=roll.label;
+   const title=document.createElement('strong');title.textContent=roll.label+(roll.remaining_mg===0?' · OUT OF STOCK':roll.remaining_mg<=100000?' · LOW STOCK':'');
    const info=document.createElement('small');info.textContent=roll.material+' · '+roll.color+' · '+grams(roll.remaining_mg)+' / '+grams(roll.initial_mg)+' remaining'+(roll.purchase_cost_cents==null?'':' · Purchased '+bnd(roll.purchase_cost_cents));
    content.append(title,info);card.append(content);
    const btn=document.createElement('button');btn.type='button';btn.textContent='Adjust grams';
@@ -92,7 +168,7 @@ async function loadInventory(){
   for(const item of stock.items){
    const card=document.createElement('article');card.className='inventory-item';
    const content=document.createElement('div');content.className='inventory-item-content';
-   const title=document.createElement('strong');title.textContent=item.name+' · '+item.quantity+' '+item.unit;
+   const title=document.createElement('strong');title.textContent=item.name+' · '+item.quantity+' '+item.unit+(item.quantity===0?' · OUT OF STOCK':item.quantity<=5?' · LOW STOCK':'');
    const line=document.createElement('small');line.textContent=item.category+(item.unit_cost_cents==null?'':' · '+bnd(item.unit_cost_cents)+' / '+item.unit)+(item.notes?' · '+item.notes:'');
    content.append(title,line);card.append(content);
    const controls=document.createElement('div');controls.className='stock-controls';
@@ -225,7 +301,8 @@ async function loadFinance(){
  }catch(e){financeFeedback('Could not load finance: '+e.message,true)}
 }
 document.querySelectorAll('[data-section]').forEach(b=>b.onclick=()=>section(b.dataset.section));$('menu').onclick=()=>document.querySelector('.sidebar').classList.toggle('open');$('logout').onclick=()=>{clearSession();$('portal').hidden=true;$('signin').hidden=false;google?.accounts?.id?.disableAutoSelect?.();message('Signed out.');};$('search').oninput=renderOrders;$('paymentFilter').onchange=renderOrders;$('stageFilter').onchange=renderOrders;$('refreshOrders').onclick=loadOrders;
-$('productForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;try{await api('products',{method:'POST',body:new FormData(e.target)});e.target.reset();await loadProducts();message('Product published successfully.');productFeedback('Product published successfully. The form is clear for your next product.');productTop()}catch(x){message(x.message)}finally{btn.disabled=false}};
+$('productForm').onsubmit=async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;try{const body=new FormData(e.target);body.set('materials_json',JSON.stringify(collectRecipe(e.target)));await api('products',{method:'POST',body});e.target.reset();await loadProducts();message('Product published successfully.');productFeedback('Product published successfully. The form is clear for your next product.');productTop()}catch(x){message(x.message)}finally{btn.disabled=false}};
+makeRecipeEditor($('productForm'),[]);
 $('financeMonth').value=bruneiDate().slice(0,7);
 $('financeMonth').onchange=()=>{financeFeedback('');loadFinance()};
 $('financeExport').onclick=financeExport;

@@ -1,5 +1,5 @@
 import {authorize,json} from './_shared.js';
-import {mergeCatalog,snapshot} from './_printing.js';
+import {loadTrustedProducts,makeOrderItems} from './_order_items.js';
 const clean=(v,max=200)=>String(v||'').trim().slice(0,max);
 const bad=(e,status=400)=>json({error:e},status);
 const paymentStates=['unpaid','awaiting_review','verified','rejected'];
@@ -15,24 +15,16 @@ export async function onRequestPost({request,env}){
  if(name.length<2||!/^[+\d\s()-]{7,25}$/.test(phone))return bad('Enter a valid name and phone number');
  let submitted;try{submitted=JSON.parse(String(form.get('items')||'[]'))}catch{return bad('Invalid items')}
  if(!Array.isArray(submitted)||!submitted.length||submitted.length>40)return bad('Choose at least one item');
- // Server-owned pricing only; never trust prices submitted by the browser.
- const catalog=Object.fromEntries(mergeCatalog().map(p=>[p.id,p]));
- if(env.PRINTNEST_BUCKET){
-  try{const object=await env.PRINTNEST_BUCKET.get('catalog/products.json');const extra=object?await object.json():[];
-   if(!Array.isArray(extra))throw Error('Invalid product data');
-   for(const p of extra)if(p&&p.id)catalog[p.id]={...(catalog[p.id]||{}),...p};
-  }catch{return bad('Product catalog unavailable',503)}
- }
-
- let items=[],total=0,unpriced=false;
- for(const s of submitted){let p=catalog[clean(s.id,80)],qty=Number(s.qty);if(!p||p.visible===false||!Number.isSafeInteger(qty)||qty<1||qty>100)return bad('Invalid cart item');const price=p.price===null?null:Math.round(Number(p.price)*100);if(price!==null&&(!Number.isSafeInteger(price)||price<0))return bad('Invalid product price');items.push({id:clean(s.id,80),title:p.title,quantity:qty,price_cents:price,...snapshot(p)});if(price===null)unpriced=true;else total+=price*qty}
- if(total>100000000)return bad('Order exceeds allowed value');
+ // Server-owned product prices, material recipes, bundle components and print estimates.
+ let computed;
+ try{computed=makeOrderItems(await loadTrustedProducts(env),submitted)}catch(e){return bad(e.message||'Invalid cart items')}
+ const items=computed.items,orderTotal=computed.total_cents;
  if(proof&&proof.size){if(!env.PRINTNEST_RECEIPTS)return bad('Receipt storage not configured. Please contact PrintNest or send proof through WhatsApp.',503);if(proof.size>5*1024*1024)return bad('Proof must be 5 MB or smaller',413);if(!receiptTypes[proof.type]||!validReceipt(await proof.slice(0,16).arrayBuffer(),proof.type))return bad('Receipt must be PNG, JPG, WebP or PDF')}
  const id='PN-'+new Date().toISOString().slice(0,10).replaceAll('-','')+'-'+crypto.randomUUID().slice(0,8).toUpperCase();let key=null;
  try{
  if(proof&&proof.size){key=`receipts/${id}.${receiptTypes[proof.type]}`;await env.PRINTNEST_RECEIPTS.put(key,proof.stream(),{httpMetadata:{contentType:proof.type}})}
- await env.PRINTNEST_DB.prepare('INSERT INTO orders(id,customer_name,customer_phone,notes,items_json,total_cents,payment_status,receipt_key,receipt_type) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,name,phone,notes,JSON.stringify(items),unpriced?null:total,key?'awaiting_review':'unpaid',key,key?proof.type:null).run();
- return json({id,success:true,total:unpriced?null:total/100,payment_status:key?'awaiting_review':'unpaid'},201)
+ await env.PRINTNEST_DB.prepare('INSERT INTO orders(id,customer_name,customer_phone,notes,items_json,total_cents,payment_status,receipt_key,receipt_type) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,name,phone,notes,JSON.stringify(items),orderTotal,key?'awaiting_review':'unpaid',key,key?proof.type:null).run();
+ return json({id,success:true,total:orderTotal===null?null:orderTotal/100,payment_status:key?'awaiting_review':'unpaid'},201)
  }catch(e){if(key)try{await env.PRINTNEST_RECEIPTS.delete(key)}catch{};return bad('Order could not be saved. Please retry.',500)}
 }
 export async function onRequestGet({request,env}){

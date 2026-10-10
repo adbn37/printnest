@@ -28,4 +28,4 @@ export async function roleFor(request,env){
 export async function guard(request,env,{master=false}={}){const user=await roleFor(request,env);if(user.error)return {response:json({error:user.error},user.status)};if(master&&!['developer','master_admin'].includes(user.role))return {response:json({error:'Master admin only'},403)};return {user}}
 export const invalid=(message,status=400)=>json({error:message},status);
 export const permittedPayments=['unpaid','awaiting_review','verified','rejected'];
-export const permittedStages=['new','confirmed','printing','ready','completed','cancelled'];
+export const permittedStages=['new','confirmed','awaiting_materials','printing','ready','completed','cancelled'];
