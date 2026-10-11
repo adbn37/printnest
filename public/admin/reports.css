@@ -1,0 +1,25 @@
+/* PrintNest V10 operational reporting — scoped styles */
+.pn-v10-hero{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.pn-v10-hero p{margin:8px 0 0;color:#716a83;line-height:1.6}
+.pn-v10-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:17px 0}
+.pn-v10-toolbar label{max-width:210px}.pn-v10-toolbar input,.pn-v10-toolbar select{width:100%}
+.pn-v10-toolbar button{align-self:end}
+.pn-v10-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}
+.pn-v10-kpi{background:#fff;border:1px solid #e7e1ee;border-radius:13px;padding:15px;display:grid;gap:8px;min-width:0}
+.pn-v10-kpi small{font-size:12px;color:#786f90}
+.pn-v10-kpi strong{font-size:23px;color:#27223a;overflow-wrap:anywhere}
+.pn-v10-checks{display:grid;gap:9px}
+.pn-v10-checks p{line-height:1.55;margin:0;padding:13px 14px;border-radius:10px}
+.pn-v10-ok{color:#205a44;background:#f0faf4;border:1px solid #cae8d3}
+.pn-v10-warning{color:#805521;background:#fff9ef;border:1px solid #f1d8b0}
+.pn-v10-filter{display:flex;align-items:end;gap:11px;flex-wrap:wrap;margin:15px 0}
+.pn-v10-filter input{flex:1 1 240px;min-width:0}.pn-v10-filter select{flex:0 1 230px}
+.pn-v10-table-wrap{overflow-x:auto;border:1px solid #e7e1ee;border-radius:12px;margin-top:15px}
+.pn-v10-table{width:100%;border-collapse:collapse;min-width:690px;font-size:13px}
+.pn-v10-table th{text-align:left;color:#5d4c84;background:#faf8ff;font-weight:700;padding:11px 12px}
+.pn-v10-table td{border-top:1px solid #eee9f3;padding:11px 12px;color:#413954;vertical-align:top}
+.pn-v10-table tr:nth-child(even) td{background:#fcfbfe}
+.pn-v10-foot{font-size:12px;color:#746b85;line-height:1.6}
+#reportFeedback{font-weight:650;color:#6545a7;margin:12px 0}
+@media(max-width:1100px){.pn-v10-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){.pn-v10-kpis{grid-template-columns:1fr 1fr}.pn-v10-kpi strong{font-size:19px}.pn-v10-toolbar>*{flex:1 1 130px}.pn-v10-filter>*{width:100%;flex:1 1 100%}}
