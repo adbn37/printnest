@@ -29,6 +29,7 @@ function render(){
  for(const p of list){
   const card=document.createElement('article');card.className='product';
   card.innerHTML=`<div class="product-image"><img src="${esc(p.image)}" loading="lazy" alt="${esc(p.title)}"><span class="product-category">${esc(p.category)}</span></div><div class="product-info"><h3>${esc(p.title)}</h3><p>${esc(p.description||'Customized 3D printed creation.')}</p><div class="product-bottom"><span class="price">${p.price==null?'On request':price(p.price)}</span><button class="add" type="button" aria-label="Personalise ${esc(p.title)}">Personalise ↗</button></div></div>`;
+  card.querySelector('.product-image img').onerror=()=>{const missing=document.createElement('div');missing.className='shop-image-unavailable';missing.textContent='Image temporarily unavailable';card.querySelector('.product-image img')?.replaceWith(missing)};
   card.querySelector('.add').onclick=()=>openCustomizer(p.id);
   holder.append(card);
  }

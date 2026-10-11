@@ -289,6 +289,7 @@ function printingSummary(p){return p.print_weight_g!=null&&p.print_minutes!=null
 function productFeedback(text,isError=false){const el=$('productFeedback');if(!el)return;el.hidden=!text;el.textContent=text;el.classList.toggle('is-error',isError)}
 function productTop(){const heading=$('products');if(heading)heading.scrollIntoView({behavior:'smooth',block:'start'})}
 let productCatalogPage=1;
+let productCatalogView='active'; // active products and archived products are separate screens
 async function loadProducts(){
  try{
   const d=await api('products');products=d.products||[];catalogOptions=products;refreshBundleRows();if(d.warning)message(d.warning);
@@ -301,6 +302,7 @@ function renderProductCatalog(){
  const category=$('catalogCategory')?.value||'all',type=$('catalogType')?.value||'all',status=$('catalogStatus')?.value||'all',sort=$('catalogSort')?.value||'name';
  const min=String($('catalogMin')?.value||'').trim(),max=String($('catalogMax')?.value||'').trim();
  const filtered=products.filter(p=>{
+  if((p.archived===true)!==(productCatalogView==='archive'))return false;
   const archived=p.archived===true,visible=p.visible!==false;
   const state=archived?'archived':visible?'active':'hidden';
   return (!term||[p.title,p.category,p.description,p.id].join(' ').toLowerCase().includes(term))
@@ -316,11 +318,14 @@ function renderProductCatalog(){
   sort==='status'?Number(b.archived===true)-Number(a.archived===true)||String(a.title).localeCompare(String(b.title)):
   String(a.title).localeCompare(String(b.title)));
  const pageCount=Math.max(1,Math.ceil(filtered.length/9));productCatalogPage=Math.max(1,Math.min(productCatalogPage,pageCount));
- $('catalogCount').textContent=filtered.length+' of '+products.length+' products · 9 per page';
+ const viewTotal=products.filter(p=>(p.archived===true)===(productCatalogView==='archive')).length;
+ $('catalogCount').textContent=filtered.length+' of '+viewTotal+(productCatalogView==='archive'?' archived products':' current products')+' · 9 per page';
+ const archiveTab=document.querySelector('#products .pn-workspace-actions [data-mode=archive]');
+ if(archiveTab)archiveTab.textContent='Archive ('+products.filter(p=>p.archived===true).length+')';
  $('catalogPageInfo').textContent='Page '+productCatalogPage+' of '+pageCount;
  $('catalogPrevious').disabled=productCatalogPage===1;
  $('catalogNext').disabled=productCatalogPage>=pageCount;
- if(!filtered.length){holder.textContent='No products match these filters.';return}
+ if(!filtered.length){holder.textContent=productCatalogView==='archive'?'No archived products match these filters.':'No current products match these filters.';return}
  for(const p of filtered.slice((productCatalogPage-1)*9,productCatalogPage*9)){
    const card=document.createElement('article');card.className='panel pn-product-card';
    const form=document.createElement('form');form.className='product-editor';form.hidden=true;
@@ -330,6 +335,7 @@ function renderProductCatalog(){
    form.onsubmit=async e=>{e.preventDefault();const btn=form.querySelector('[type=submit]');btn.disabled=true;try{const body=new FormData(form);body.set('id',p.id);body.set('visible',String(form.querySelector('[name=visible]').checked));await api('products',{method:'PATCH',body});await loadProducts();message('Product saved successfully.');productFeedback('Product saved successfully.');productTop()}catch(e){message(e.message);productFeedback('Could not save product: '+e.message,true)}finally{btn.disabled=false}};
    form.querySelector('.remove-product').onclick=async()=>{if(!confirm('Delete '+p.title+'? Existing orders remain in history.'))return;try{await api('products?id='+encodeURIComponent(p.id),{method:'DELETE'});message('Product removed.');await loadProducts()}catch(e){message(e.message)}};
    const image=document.createElement('img');image.src=p.image;image.alt=p.title;image.loading='lazy';image.className='pn-product-image';
+   image.onerror=()=>{const missing=document.createElement('div');missing.className='pn-product-image pn-image-unavailable';missing.textContent='Image unavailable — use Edit details to replace the photo';image.replaceWith(missing)};
    const badge=document.createElement('span');badge.className='pn-catalog-badge';badge.textContent=p.archived===true?'Archived':p.visible===false?'Hidden':'On storefront';
    if(p.archived===true)badge.classList.add('is-archived');
    const summary=document.createElement('div');summary.className='product-summary';summary.textContent=p.title+' · '+(p.price===null?'Quote needed':bnd(Math.round(p.price*100)))+' · '+printingSummary(p);
@@ -354,7 +360,7 @@ function setupManagementLayout(){
  const productsSection=$('products');
  const addPanel=$('productForm').closest('.panel'),bundlePanel=$('bundleForm').closest('.panel'),catalogPanel=$('productList').closest('.panel');
  const productActions=document.createElement('div');productActions.className='pn-workspace-actions';
- productActions.innerHTML='<button type="button" data-mode="add">+ Add a Product</button><button type="button" data-mode="bundle">+ Create Gift Bundle</button><button type="button" data-mode="catalog">All Products</button>';
+ productActions.innerHTML='<button type="button" data-mode="add">+ Add a Product</button><button type="button" data-mode="bundle">+ Create Gift Bundle</button><button type="button" data-mode="catalog">All Products</button><button type="button" data-mode="archive">Archive (0)</button>';
  productsSection.insertBefore(productActions,addPanel);
  addPanel.classList.add('pn-workspace-form');bundlePanel.classList.add('pn-workspace-form');
  const catalogHeader=catalogPanel.querySelector('h2');catalogHeader.textContent='All Products';
@@ -362,7 +368,7 @@ function setupManagementLayout(){
  tools.innerHTML=`<input id="catalogSearch" type="search" placeholder="Search product name, ID or description" aria-label="Search products">
  <select id="catalogCategory" aria-label="Filter category"><option value="all">All categories</option><option>Clickers</option><option>Keychains</option><option>Gifts</option></select>
  <select id="catalogType" aria-label="Product type"><option value="all">All types</option><option value="single">Single products</option><option value="bundle">Gift bundles</option></select>
- <select id="catalogStatus" aria-label="Product status"><option value="all">All statuses</option><option value="active">Storefront / active</option><option value="hidden">Hidden</option><option value="archived">Archived</option></select>
+ <select id="catalogStatus" aria-label="Product status"><option value="all">All statuses</option><option value="active">Storefront / active</option><option value="hidden">Hidden</option></select>
  <select id="catalogSort" aria-label="Sort products"><option value="name">Name A–Z</option><option value="category">Category</option><option value="price-asc">Price: Low–high</option><option value="price-desc">Price: High–low</option><option value="status">Archive status</option></select>
  <input id="catalogMin" type="number" min="0" step="0.01" placeholder="Min BND" aria-label="Minimum price">
  <input id="catalogMax" type="number" min="0" step="0.01" placeholder="Max BND" aria-label="Maximum price">
@@ -375,8 +381,15 @@ function setupManagementLayout(){
  $('productList').after(paging);
  const setMode=(mode,scroll=true)=>{
   addPanel.hidden=mode!=='add';bundlePanel.hidden=mode!=='bundle';
+  if(mode==='catalog'||mode==='archive'){
+   productCatalogView=mode==='archive'?'archive':'active';
+   productCatalogPage=1;
+   $('catalogStatus').value='all';
+   catalogHeader.textContent=mode==='archive'?'Archived Products':'All Products';
+   renderProductCatalog();
+  }
   for(const button of productActions.querySelectorAll('button'))button.classList.toggle('is-active',button.dataset.mode===mode);
-  if(scroll){if(mode==='catalog'){$('catalogSearch').focus({preventScroll:true});catalogPanel.scrollIntoView({behavior:'smooth',block:'start'})}else (mode==='add'?addPanel:bundlePanel).scrollIntoView({behavior:'smooth',block:'start'})}
+  if(scroll){if(mode==='catalog'||mode==='archive'){$('catalogSearch').focus({preventScroll:true});catalogPanel.scrollIntoView({behavior:'smooth',block:'start'})}else (mode==='add'?addPanel:bundlePanel).scrollIntoView({behavior:'smooth',block:'start'})}
  };
  productActions.querySelectorAll('button').forEach(button=>button.onclick=()=>setMode(button.dataset.mode));setMode('catalog',false);
  for(const id of ['catalogSearch','catalogCategory','catalogType','catalogStatus','catalogSort','catalogMin','catalogMax']){

@@ -25,3 +25,6 @@
 .order-personalizations p{font-size:12px;line-height:1.55;margin:8px 0 0}
 @media(max-width:700px){.mobile-shop-link{display:inline-flex}.shop-toolbar{grid-template-columns:minmax(0,1fr)}.shop-toolbar input,.shop-toolbar select{min-height:47px}.customize-card{padding:17px;max-height:95vh}.customize-intro img{width:78px;height:78px}.customize-card .form-pair{grid-template-columns:1fr 1.4fr}.drawer-bottom{max-height:72vh;padding:15px 17px}.cart-items{padding:10px 15px}.product-bottom{align-items:stretch;gap:8px;flex-direction:column}.product-bottom .add{width:100%}}
 @media(max-width:380px){.nav-actions{gap:5px}.mobile-shop-link{display:none}.customize-card .form-pair{grid-template-columns:1fr}}
+
+/* V12.1: Don't render a broken-image icon or exposed alt text in product cards. */
+.shop-image-unavailable{display:flex;align-items:center;justify-content:center;text-align:center;width:100%;height:100%;padding:18px;font-size:13px;font-weight:700;line-height:1.5;color:#777080;background:#f1eafd}
