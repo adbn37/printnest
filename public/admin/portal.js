@@ -34,16 +34,23 @@ async function start(){
 }
 async function loadOrders(){try{const d=await api('orders');orders=d.orders||[];$('statOrders').textContent=orders.length;$('statReview').textContent=orders.filter(o=>o.payment_status==='awaiting_review').length;$('statPrinting').textContent=orders.filter(o=>o.fulfillment_status==='printing').length;$('statDone').textContent=orders.filter(o=>o.fulfillment_status==='completed').length;$('recentOrders').innerHTML='<div class="simple-row simple-head"><span>Order</span><span>Customer</span><span>Amount</span><span>Payment</span></div>'+ (orders.slice(0,8).map(o=>`<div class="simple-row"><strong>${esc(o.id)}</strong><span>${esc(o.customer_name)}</span><span>${o.total_cents===null?'Quote needed':bnd(o.total_cents)}</span><span class="status-text">${esc(o.payment_status.replaceAll('_',' '))}</span></div>`).join('')||'<div class="empty-row">No orders yet</div>');renderOrders();}catch(e){message(e.message)}}
 function opt(values,current){return values.map(v=>`<option value="${v}" ${v===current?'selected':''}>${v.replaceAll('_',' ')}</option>`).join('')}
-function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();for(const o of list){const el=document.createElement('article');el.className='panel order';el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar order-status-controls"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','awaiting_materials','printing','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button></div><div class="order-extra-actions"><button class="addons" type="button">Order materials</button><button class="stock-check" type="button">Check materials</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="extras-edit" hidden></div><div class="material-check" role="status" hidden></div><div class="preview" hidden></div>`;
+function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();for(const o of list){const el=document.createElement('article');el.className='panel order';el.dataset.orderId=o.id;el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar order-status-controls"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','awaiting_materials','printing','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button></div><div class="order-extra-actions"><button class="addons" type="button">Order materials</button><button class="stock-check" type="button">Check materials</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="extras-edit" hidden></div><div class="material-check" role="status" hidden></div><div class="preview" hidden></div>`;
+ const orderInfo=document.createElement('div');orderInfo.className='order-details-grid';
+ const totalUnits=(o.items||[]).reduce((n,i)=>n+Number(i.quantity||0),0);
+ const printInfo=(o.items||[]).every(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null);
+ const summaries=[['Units',String(totalUnits)],['Placed',String(o.created_at||'—').slice(0,16)],['Creality estimates',printInfo?'Recorded':'Missing — edit Order materials']];
+ for(const [heading,value] of summaries){const cell=document.createElement('div');cell.className='order-detail';const cap=document.createElement('small');cap.textContent=heading;const desc=document.createElement('strong');desc.textContent=value;cell.append(cap,desc);orderInfo.append(cell)}
+ el.querySelector('.order-head').after(orderInfo);
+ if(!printInfo){const hint=document.createElement('p');hint.className='order-setup-hint';hint.textContent='This order has no saved Creality estimates. Filament may be in stock, but enter weight, time, and cost under Order materials before printing.';orderInfo.after(hint)}
  if(['printing','ready','completed','cancelled'].includes(o.fulfillment_status)){const b=el.querySelector('.addons');b.disabled=true;b.title='Materials are locked after production starts or order closes';}
  el.querySelector('.addons').onclick=async()=>{
-  const editor=el.querySelector('.extras-edit');if(!editor.hidden){editor.hidden=true;return}
-  editor.hidden=false;editor.textContent='Loading order materials…';
+  const editor=el.querySelector('.extras-edit');if(!editor.hidden){editor.hidden=true;el.classList.remove('is-editing');return}
+  editor.hidden=false;el.classList.add('is-editing');editor.textContent='Loading order materials…';
   try{
-   const [rolls,stock,saved]=await Promise.all([api('production'),api('inventory'),api('order-extras?id='+encodeURIComponent(o.id))]);
+   const [rolls,stock,saved,catalog]=await Promise.all([api('production'),api('inventory'),api('order-extras?id='+encodeURIComponent(o.id)),api('products')]);
    editor.replaceChildren();
    const heading=document.createElement('strong');heading.textContent='Materials and accessories for this order';editor.append(heading);
-   const hint=document.createElement('p');hint.className='muted';hint.textContent='Choose the PLA colours used for this customer, then optionally add a box, plastic or accessory. Filament weight must match the total Creality weight. The order is not charged extra automatically.';editor.append(hint);
+   const hint=document.createElement('p');hint.className='muted';hint.textContent='Step 1: Enter the Creality values for each item. Step 2: Choose each filament colour and its grams. Step 3: Add optional box / packaging only if requested. Step 4: Save and check materials. Existing stock is NOT an error by itself.';editor.append(hint);
    const estimateSection=document.createElement('div');estimateSection.className='order-estimate-items';editor.append(estimateSection);
    const estimateRows=[];
    for(const [ix,line] of (o.items||[]).entries()){
@@ -53,7 +60,17 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
     for(const [field,label,value,step] of [['print_weight_g','Weight (g)',line.print_weight_g,'0.001'],['print_minutes','Time (min)',line.print_minutes,'1'],['print_cost','Cost (BND)',line.print_cost_cents==null?'':(line.print_cost_cents/100).toFixed(2),'0.01']]){
      const l=document.createElement('label');l.textContent=label;const node=document.createElement('input');node.type='number';node.min=field==='print_cost'?'0':'0.001';node.step=step;node.value=value??'';node.placeholder='Per unit';l.append(node);fields.append(l);input[field]=node;
     }
-    row.append(fields);estimateSection.append(row);estimateRows.push(input);
+    row.append(fields);
+    const current=(catalog.products||[]).find(p=>p.id===line.id);
+    if(current&&current.print_weight_g!=null&&current.print_minutes!=null&&current.print_cost_cents!=null&&
+       (line.print_weight_g==null||line.print_minutes==null||line.print_cost_cents==null)){
+      const load=document.createElement('button');load.type='button';load.className='secondary-action order-use-product';
+      load.textContent='Use current product print estimates';
+      load.title='Only fills this form. Your historical order is not changed until Save order materials.';
+      load.onclick=()=>{input.print_weight_g.value=current.print_weight_g;input.print_minutes.value=current.print_minutes;input.print_cost.value=(current.print_cost_cents/100).toFixed(2);editor.dispatchEvent(new Event('input',{bubbles:true}))};
+      row.append(load);
+    }
+    estimateSection.append(row);estimateRows.push(input);
    }
    const rows=document.createElement('div');rows.className='recipe-stack';editor.append(rows);
    const filamentChoices=new Map();for(const r of rolls.rolls||[]){const key=JSON.stringify([r.material,r.color]);const entry=filamentChoices.get(key)||{name:r.material+' · '+r.color,grams:0};entry.grams+=Number(r.remaining_mg||0)/1000;filamentChoices.set(key,entry)}
@@ -71,6 +88,39 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
     wrap.append(label,qlabel,remove);rows.append(wrap);
    }
    for(const m of saved.items||[])addRow(m.kind==='filament'?'filament':'item',m);
+   const liveSummary=document.createElement('div');liveSummary.className='order-material-summary';liveSummary.setAttribute('role','status');editor.insertBefore(liveSummary,rows);
+   function updateMaterialSummary(){
+     const summary=[],errors=[];let expectedMg=0,assignedMg=0,complete=true;
+     for(let ix=0;ix<estimateRows.length;ix++){
+       const inputs=estimateRows[ix],w=String(inputs.print_weight_g.value).trim(),m=String(inputs.print_minutes.value).trim(),c=String(inputs.print_cost.value).trim();
+       if(!w||!m||c===''||!Number.isFinite(Number(w))||Number(w)<=0||!Number.isFinite(Number(m))||Number(m)<=0||!Number.isFinite(Number(c))||Number(c)<0){complete=false;continue}
+       expectedMg+=Math.round(Number(w)*1000)*Number(o.items[ix].quantity||1);
+     }
+     const seen=new Set();
+     for(const row of rows.children){if(row.dataset.kind!=='filament')continue;
+       const value=row.querySelector('.material-stock').value;
+       const weight=Number(row.querySelector('.material-qty').value||0);
+       if(!value||!Number.isFinite(weight)||weight<=0)continue;
+       let material,color;try{[material,color]=JSON.parse(value)}catch{continue}
+       const key=String(material).toLowerCase()+'|'+String(color).toLowerCase();
+       if(seen.has(key))errors.push('This filament colour appears more than once. Combine its grams into one row.');seen.add(key);
+       const neededMg=Math.round(weight*1000);assignedMg+=neededMg;
+       const matching=(rolls.rolls||[]).filter(r=>r.material.toLowerCase()===String(material).toLowerCase()&&r.color.toLowerCase()===String(color).toLowerCase());
+       const biggest=Math.max(0,...matching.map(r=>Number(r.remaining_mg||0)));
+       if(biggest<neededMg)errors.push(material+' '+color+': needs '+(neededMg/1000).toFixed(3)+' g; largest available matching roll has '+(biggest/1000).toFixed(3)+' g.');
+     }
+     if(!complete)summary.push('Printing estimates: enter weight, time and cost for every product.');
+     else summary.push('Total Creality weight required: '+(expectedMg/1000).toFixed(3)+' g.');
+     summary.push('Selected filament weight: '+(assignedMg/1000).toFixed(3)+' g.');
+     if(complete&&assignedMg!==expectedMg)errors.unshift('Assigned grams must equal Creality weight; difference: '+(Math.abs(expectedMg-assignedMg)/1000).toFixed(3)+' g.');
+     if(!seen.size)errors.push('No filament colour selected yet.');
+     liveSummary.textContent=[...summary,...errors].join('\n');
+     liveSummary.classList.toggle('is-short',errors.length>0||!complete);
+   }
+   editor.addEventListener('input',updateMaterialSummary);
+   editor.addEventListener('change',updateMaterialSummary);
+   editor.addEventListener('click',()=>queueMicrotask(updateMaterialSummary));
+   updateMaterialSummary();
    const buttons=document.createElement('div');buttons.className='order-extra-actions';
    for(const [label,kind] of [['+ Filament colour','filament'],['+ Box / accessory','item']]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>addRow(kind);buttons.append(b)}
    const save=document.createElement('button');save.type='button';save.className='primary';save.textContent='Save order materials';buttons.append(save);
@@ -83,6 +133,14 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
       if(row.dataset.kind==='filament'){const [material,color]=JSON.parse(choice);items.push({kind:'filament',material,color,grams:qty})}
       else items.push({kind:'item',item_id:choice,quantity_units:qty});
      }
+     for(const [ix,inputs] of estimateRows.entries()){
+       if(String(inputs.print_weight_g.value).trim()===''||String(inputs.print_minutes.value).trim()===''||String(inputs.print_cost.value).trim()==='')
+        throw Error('Creality estimates missing for '+o.items[ix].title+'. Enter weight, time and cost first.');
+     }
+     const requiredMg=estimateRows.reduce((n,inputs,ix)=>n+Math.round(Number(inputs.print_weight_g.value)*1000)*Number(o.items[ix].quantity),0);
+     const assignedMg=items.filter(i=>i.kind==='filament').reduce((n,i)=>n+Math.round(Number(i.grams)*1000),0);
+     if(!assignedMg)throw Error('Choose at least one filament colour and enter its grams.');
+     if(requiredMg!==assignedMg)throw Error('Assigned filament '+(assignedMg/1000).toFixed(3)+' g does not match Creality weight '+(requiredMg/1000).toFixed(3)+' g.');
      save.disabled=true;save.textContent='Saving…';
      await api('order-extras',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id,items,estimates})});
      notice.textContent='Saved! Check materials, then start Printing.';message('Materials saved for '+o.id+'.');await loadOrders();
@@ -92,8 +150,10 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
  };
  el.querySelector('.stock-check').onclick=async()=>{const out=el.querySelector('.material-check');out.hidden=false;out.textContent='Checking stock…';
   try{const d=await api('material-check?id='+encodeURIComponent(o.id));out.classList.toggle('is-short',!d.available);
-   out.textContent=d.started?'Production already recorded. Stock was deducted when this order entered Printing.':d.available?'All materials available — ready to start Printing.':
-    ['Cannot start printing yet.',...(d.missing_products?.length?['Order setup: '+d.missing_products.join('; ')]:[]),...(d.shortages||[]).map(x=>x.label+': need '+x.required+' '+x.unit+', available '+x.available+' '+x.unit+', shortage '+x.shortfall+' '+x.unit)].join('\n')}
+   out.textContent=d.started?'Production already recorded. No second stock deduction is needed.':
+    d.missing_products?.length?'ORDER SETUP INCOMPLETE — not an out-of-stock warning.\n'+d.missing_products.join('\n')+'\nOpen Order materials, complete the Creality estimates, select filament grams and press Save order materials.':
+    d.shortages?.length?'INSUFFICIENT MATCHING STOCK.\n'+d.shortages.map(x=>x.label+': need '+x.required+' '+x.unit+', largest usable stock '+x.available+' '+x.unit+', short '+x.shortfall+' '+x.unit+(x.reason?' — '+x.reason:'')).join('\n'):
+    d.available?'READY — all saved materials are available. You can now set Production to Printing.':'MATERIALS NOT READY — open Order materials and check the saved values.'}
   catch(err){out.classList.add('is-short');out.textContent=err.message}
  };
  el.querySelector('.save').onclick=async()=>{if(el.querySelector('.pay').value==='verified'&&o.payment_status!=='verified'&&!confirm('Have you checked the actual bank transaction? A screenshot alone is NOT proof of payment.'))return;try{const saved=await api('orders',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id,payment_status:el.querySelector('.pay').value,fulfillment_status:el.querySelector('.stage').value})});await loadOrders();message(saved.registered?'Order saved. Material stock deducted once; Creality cost posted to Finance.':saved.blocked?'Order moved to Awaiting materials. '+(saved.missing_products?.length?'Finish order materials: '+saved.missing_products.join('; ')+'. ':'')+(saved.shortages||[]).map(x=>x.label+' short '+x.shortfall+' '+x.unit).join('; '):'Order status saved. No duplicate stock deduction.')}catch(e){message(e.message)}};
