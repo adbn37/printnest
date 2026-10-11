@@ -1,13 +1,23 @@
 import {mergeCatalog,snapshot} from './_printing.js';
 import {getCatalog} from './_shared.js';
 
+// Customer preferences are requests; they never control catalog prices, stock or manufacturing costs.
+function customerCustomization(raw){
+ if(raw===undefined||raw===null)return null;
+ if(typeof raw!=='object'||Array.isArray(raw))throw Error('Invalid product personalisation');
+ const read=(key,max)=>{const v=raw[key]??'';if(typeof v!=='string'||v.length>max)throw Error('Personalisation field too long or invalid: '+key);return v.trim()};
+ const wording=read('wording',80),color=read('color',50),instructions=read('instructions',300),packaging=read('packaging',24)||'None';
+ if(!['None','Plastic','Gift box','Other'].includes(packaging))throw Error('Invalid packaging preference');
+ return {wording,color,packaging,instructions};
+}
+
 export async function loadTrustedProducts(env){return mergeCatalog(await getCatalog(env))}
 export function makeOrderItems(catalog,selected){
  if(!Array.isArray(selected)||!selected.length||selected.length>40)throw Error('Select 1–40 order lines');
  const products=new Map(catalog.map(p=>[p.id,p]));const lines=[];let total=0,unpriced=false;
  for(const request of selected){
   const id=String(request.id||''),quantity=Number(request.qty??request.quantity),p=products.get(id);
-  if(!p||p.visible===false||!Number.isInteger(quantity)||quantity<1||quantity>100)throw Error('Invalid product or order quantity');
+  if(!p||p.visible===false||p.archived===true||!Number.isInteger(quantity)||quantity<1||quantity>100)throw Error('Invalid product or order quantity');
   let detail,materials,print,price;
   if(p.product_type==='bundle'){
    if(!Array.isArray(p.components)||!p.components.length)throw Error('Bundle components are missing');
@@ -25,7 +35,7 @@ export function makeOrderItems(catalog,selected){
   price=p.price===null?null:Math.round(Number(p.price)*100);
   if(price!==null&&(!Number.isSafeInteger(price)||price<0))throw Error('Invalid product price');
   if(price===null)unpriced=true;else total+=price*quantity;
-  lines.push({id,title:p.title,quantity,price_cents:price,...print,materials,product_type:detail,recipe_version:2});
+  lines.push({id,title:p.title,quantity,price_cents:price,...print,materials,product_type:detail,recipe_version:2,customization:customerCustomization(request.customization)});
  }
  if(total>100000000)throw Error('Order exceeds price limit');
  return {items:lines,total_cents:unpriced?null:total};

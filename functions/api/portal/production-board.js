@@ -32,7 +32,7 @@ export async function onRequestGet({request,env}){
    try{materials=JSON.parse(o.extras_json||'[]')}catch{}
    const costs=Number(o.print_cost_cents||0)+Number(o.electricity_cents||0)+Number(o.accessory_cost_cents||0)+Number(o.manual_cost_cents||0);
    return {id:o.id,customer_name:o.customer_name,customer_phone:o.customer_phone,order_notes:o.order_notes,
-    items:items.map(i=>({title:i.title,quantity:i.quantity,print_weight_g:i.print_weight_g,print_minutes:i.print_minutes,print_cost_cents:i.print_cost_cents})),
+    items:items.map(i=>({title:i.title,quantity:i.quantity,customization:i.customization||null,print_weight_g:i.print_weight_g,print_minutes:i.print_minutes,print_cost_cents:i.print_cost_cents})),
     materials:materials.map(m=>m.kind==='filament'?`${m.material} ${m.color}: ${(Number(m.quantity_mg||0)/1000).toFixed(3)} g`:`${m.name||'Accessory'}: ${m.quantity_units} ${m.unit||'pcs'}`),
     total_cents:o.total_cents,payment_status:o.payment_status,status:o.fulfillment_status,
     lane:productionLane(o.fulfillment_status),created_at:o.created_at,

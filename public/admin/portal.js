@@ -55,6 +55,18 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
  const summaries=[['Units',String(totalUnits)],['Placed',String(o.created_at||'—').slice(0,16)],['Creality estimates',printInfo?'Recorded':'Missing — edit Order materials']];
  for(const [heading,value] of summaries){const cell=document.createElement('div');cell.className='order-detail';const cap=document.createElement('small');cap.textContent=heading;const desc=document.createElement('strong');desc.textContent=value;cell.append(cap,desc);orderInfo.append(cell)}
  el.querySelector('.order-head').after(orderInfo);
+ const personalizations=(o.items||[]).filter(i=>i.customization&&Object.values(i.customization).some(Boolean));
+ if(personalizations.length){
+  const pane=document.createElement('div');pane.className='order-personalizations';
+  const heading=document.createElement('strong');heading.textContent='Customer personalisation requests';pane.append(heading);
+  for(const line of personalizations){
+   const c=line.customization,row=document.createElement('p');
+   row.textContent=line.title+' × '+line.quantity+' — '+[c.wording&&'Wording: '+c.wording,c.color&&'Colour: '+c.color,c.packaging&&c.packaging!=='None'&&'Packaging request: '+c.packaging,c.instructions&&'Instructions: '+c.instructions].filter(Boolean).join(' · ');
+   pane.append(row);
+  }
+  orderInfo.after(pane);
+ }
+
  if(!printInfo){const hint=document.createElement('p');hint.className='order-setup-hint';hint.textContent='This order has no saved Creality estimates. Filament may be in stock, but enter weight, time, and cost under Order materials before printing.';orderInfo.after(hint)}
  if(['printing','ready','completed','cancelled'].includes(o.fulfillment_status)){const b=el.querySelector('.addons');b.disabled=true;b.title='Materials are locked after production starts or order closes';}
  el.querySelector('.addons').onclick=async()=>{

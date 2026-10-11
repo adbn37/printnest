@@ -56,6 +56,7 @@
     const head=element('div','production-card-header');const id=element('strong','',job.id),status=element('span','production-stage',labels[job.status]||job.status);head.append(id,status);wrap.append(head);
     wrap.append(element('div','production-customer',job.customer_name+' · '+job.customer_phone));
     const items=element('div','production-products',job.items.map(i=>i.title+' × '+i.quantity).join(' · ')||'Order has no items');wrap.append(items);
+    for(const item of job.items){const c=item.customization;if(!c)continue;const fields=[c.wording&&'Wording: '+c.wording,c.color&&'Colour: '+c.color,c.packaging&&c.packaging!=='None'&&'Packaging: '+c.packaging,c.instructions&&'Notes: '+c.instructions].filter(Boolean);if(fields.length)wrap.append(element('p','production-mini',item.title+' — '+fields.join(' · ')));}
     if(job.materials?.length)wrap.append(element('p','production-mini','Materials: '+job.materials.join(' · ')));
     const stats=element('div','production-card-meta');
     appendKV(stats,'Payment',String(job.payment_status||'').replaceAll('_',' '));
