@@ -130,3 +130,36 @@
 #orderList>.order .extras-edit .order-editor-section .recipe-row{grid-template-columns:minmax(0,3fr) minmax(115px,1fr) auto}
 @media(max-width:1000px){#orderList>.order .order-extra-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){#orderList>.order .order-editor-section{padding:13px}#orderList>.order .order-editor-heading h4{font-size:15px}#orderList>.order .extras-edit .order-editor-section .recipe-row{grid-template-columns:minmax(0,1fr) 90px auto;gap:7px}#orderList>.order .order-extra-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* V9: Admin product catalog and inventory workspace */
+.pn-workspace-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0 20px}
+.pn-workspace-actions button{background:white;border:1px solid #ded5f0;color:#6341a6;border-radius:13px;padding:17px 13px;font-weight:800;text-align:center;cursor:pointer;min-height:58px}
+.pn-workspace-actions button.is-active,.pn-workspace-actions button:hover{background:#7856e6;border-color:#7856e6;color:#fff}
+.pn-workspace-form[hidden]{display:none!important}
+.pn-catalog-controls{display:grid;grid-template-columns:minmax(180px,2fr) repeat(3,minmax(125px,1fr));gap:10px;margin:18px 0}
+.pn-catalog-controls input,.pn-catalog-controls select,.pn-inventory-controls input,.pn-inventory-controls select{width:100%;min-width:0}
+.pn-catalog-controls button{border:1px solid #ded3ef;background:#f5f1ff;color:#6445a9;border-radius:9px;font-weight:700;padding:10px 12px}
+.pn-catalog-meta{font-size:13px;color:#706884;margin:10px 0 14px}
+#productList{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+#productList>.pn-product-card{margin:0;min-width:0;padding:14px;display:flex;flex-direction:column;gap:10px}
+#productList>.pn-product-card:has(.product-editor:not([hidden])){grid-column:1/-1}
+.pn-product-image{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:11px;background:#f2eef8}
+.pn-catalog-badge{align-self:start;font-size:11px;border-radius:99px;padding:6px 9px;font-weight:750;color:#315e47;background:#e7f5ec}
+.pn-catalog-badge.is-archived{color:#8c5756;background:#f9eceb}
+.pn-product-card .product-summary{margin:0;line-height:1.6;font-size:13px;flex:1}
+.pn-product-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:3px}
+.pn-product-actions button{flex:1 1 115px;min-width:0;padding:10px 8px;border-radius:9px;font-weight:700;cursor:pointer}
+.pn-product-actions .product-edit-toggle{margin:0}
+.pn-archive-button{background:#fff6f2;color:#925b43;border:1px solid #efd9ce}
+.pn-pagination{display:flex;align-items:center;justify-content:center;gap:15px;margin:22px 0 4px}
+.pn-pagination button{border:1px solid #e0d8ee;background:#f5f1ff;color:#5d45a5;padding:10px 15px;border-radius:10px;font-weight:700;cursor:pointer}
+.pn-pagination button:disabled{opacity:.42;cursor:default}
+.pn-pagination span{color:#777085;font-weight:700}
+.pn-inventory-controls{display:grid;grid-template-columns:minmax(190px,2fr) minmax(135px,1fr) minmax(135px,1fr);gap:10px;margin:15px 0 10px}
+#rollList,#stockList{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;margin:12px 0}
+#rollList .inventory-item,#stockList .inventory-item{display:flex;flex-direction:column;align-items:stretch;justify-content:space-between;min-width:0;gap:12px}
+#rollList .inventory-item button,#stockList .inventory-item button{width:100%}
+#rollList .inventory-item .stock-controls,#stockList .inventory-item .stock-controls{display:flex;flex-direction:column;align-items:stretch;width:100%}
+#rollList .inventory-item[hidden],#stockList .inventory-item[hidden]{display:none!important}
+@media(max-width:1150px){#productList,#rollList,#stockList{grid-template-columns:repeat(2,minmax(0,1fr))}.pn-catalog-controls{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:700px){.pn-workspace-actions{grid-template-columns:1fr}.pn-workspace-actions button{min-height:48px}#productList,#rollList,#stockList{grid-template-columns:1fr}.pn-inventory-controls,.pn-catalog-controls{grid-template-columns:1fr}.pn-pagination{gap:8px}#productList>.pn-product-card{padding:15px}}

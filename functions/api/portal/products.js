@@ -51,7 +51,7 @@ export async function onRequestPatch({request,env}){
   if(!current)return invalid('Product not found',404);
   const file=data.get('image');if(file?.size){const check=await validatePhoto(file);if(check.error)return invalid(check.error);newKey='images/'+crypto.randomUUID()+'.'+check.ext;await env.PRINTNEST_BUCKET.put(newKey,file.stream(),{httpMetadata:{contentType:file.type}})}
   const materials=[]; // Clear old product recipes; individual orders own all material choices.
-  const updated={...current,...input,materials,visible:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};
+  const updated={...current,...input,materials,archived:current.archived===true,visible:current.archived===true?false:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};
   const oldKey=current.product_type==='bundle'?null:(current.image?.startsWith('/images/')?current.image.slice(1):null);
   const index=list.findIndex(p=>p.id===id);if(index>=0)list[index]=updated;else list.push(updated);
   try{await putCatalog(env,list)}catch(e){if(newKey)await env.PRINTNEST_BUCKET.delete(newKey).catch(()=>{});throw e}

@@ -262,24 +262,149 @@ function printingInputs(p={}){const w=p.print_weight_g??'',t=p.print_minutes??''
 function printingSummary(p){return p.print_weight_g!=null&&p.print_minutes!=null&&p.print_cost_cents!=null?`${p.print_weight_g} g · ${p.print_minutes} min · ${bnd(p.print_cost_cents)} estimated cost`:'Creality details not set'}
 function productFeedback(text,isError=false){const el=$('productFeedback');if(!el)return;el.hidden=!text;el.textContent=text;el.classList.toggle('is-error',isError)}
 function productTop(){const heading=$('products');if(heading)heading.scrollIntoView({behavior:'smooth',block:'start'})}
+let productCatalogPage=1;
 async function loadProducts(){
  try{
-  const d=await api('products');products=d.products||[];catalogOptions=products;refreshBundleRows();
-  const holder=$('productList');holder.replaceChildren();if(d.warning)message(d.warning);
-  if(!products.length){holder.textContent='No products found.';return}
-  for(const p of products){
-   const card=document.createElement('article');card.className='panel';
+  const d=await api('products');products=d.products||[];catalogOptions=products;refreshBundleRows();if(d.warning)message(d.warning);
+  renderProductCatalog();
+ }catch(e){productFeedback('Could not load products: '+e.message,true)}
+}
+function renderProductCatalog(){
+ const holder=$('productList');holder.replaceChildren();
+ const term=String($('catalogSearch')?.value||'').trim().toLowerCase();
+ const category=$('catalogCategory')?.value||'all',type=$('catalogType')?.value||'all',status=$('catalogStatus')?.value||'all',sort=$('catalogSort')?.value||'name';
+ const min=String($('catalogMin')?.value||'').trim(),max=String($('catalogMax')?.value||'').trim();
+ const filtered=products.filter(p=>{
+  const archived=p.archived===true,visible=p.visible!==false;
+  const state=archived?'archived':visible?'active':'hidden';
+  return (!term||[p.title,p.category,p.description,p.id].join(' ').toLowerCase().includes(term))
+   &&(category==='all'||p.category===category)
+   &&(type==='all'||(p.product_type==='bundle'?'bundle':'single')===type)
+   &&(status==='all'||status===state)
+   &&(!min||(p.price!==null&&Number(p.price)>=Number(min)))
+   &&(!max||(p.price!==null&&Number(p.price)<=Number(max)));
+ });
+ filtered.sort((a,b)=>sort==='price-asc'?(a.price===null?Infinity:Number(a.price))-(b.price===null?Infinity:Number(b.price)):
+  sort==='price-desc'?(b.price===null?-Infinity:Number(b.price))-(a.price===null?-Infinity:Number(a.price)):
+  sort==='category'?String(a.category).localeCompare(String(b.category))||String(a.title).localeCompare(String(b.title)):
+  sort==='status'?Number(b.archived===true)-Number(a.archived===true)||String(a.title).localeCompare(String(b.title)):
+  String(a.title).localeCompare(String(b.title)));
+ const pageCount=Math.max(1,Math.ceil(filtered.length/9));productCatalogPage=Math.max(1,Math.min(productCatalogPage,pageCount));
+ $('catalogCount').textContent=filtered.length+' of '+products.length+' products · 9 per page';
+ $('catalogPageInfo').textContent='Page '+productCatalogPage+' of '+pageCount;
+ $('catalogPrevious').disabled=productCatalogPage===1;
+ $('catalogNext').disabled=productCatalogPage>=pageCount;
+ if(!filtered.length){holder.textContent='No products match these filters.';return}
+ for(const p of filtered.slice((productCatalogPage-1)*9,productCatalogPage*9)){
+   const card=document.createElement('article');card.className='panel pn-product-card';
    const form=document.createElement('form');form.className='product-editor';form.hidden=true;
    form.innerHTML=`<h3>${esc(p.title)}</h3><div class="fields"><label>Title<input name="title" value="${esc(p.title)}" required maxlength="100"></label><label>Price (BND)<input name="price" type="number" step="0.01" min="0" value="${p.price===null?'':Number(p.price).toFixed(2)}" ${p.id.startsWith('up-')?'required':''}></label><label>Category<select name="category"><option>Clickers</option><option>Keychains</option><option>Gifts</option></select></label><label>Replace photo (optional)<input name="image" type="file" accept="image/png,image/jpeg,image/webp"></label></div><label>Description<textarea name="description" maxlength="350" rows="2">${esc(p.description||'')}</textarea></label>${p.product_type==='bundle'?'<p class="muted">Bundle uses its component printing estimates. To change components, recreate this bundle.</p>':printingInputs(p)}<label class="toggle-row"><input name="visible" type="checkbox" ${p.visible===false?'':'checked'}> Visible in storefront</label><div class="toolbar"><button class="primary" type="submit">Save product</button><button type="button" class="remove-product">Delete</button></div>`;
    form.querySelector('[name=category]').value=p.category;
 
    form.onsubmit=async e=>{e.preventDefault();const btn=form.querySelector('[type=submit]');btn.disabled=true;try{const body=new FormData(form);body.set('id',p.id);body.set('visible',String(form.querySelector('[name=visible]').checked));await api('products',{method:'PATCH',body});await loadProducts();message('Product saved successfully.');productFeedback('Product saved successfully.');productTop()}catch(e){message(e.message);productFeedback('Could not save product: '+e.message,true)}finally{btn.disabled=false}};
    form.querySelector('.remove-product').onclick=async()=>{if(!confirm('Delete '+p.title+'? Existing orders remain in history.'))return;try{await api('products?id='+encodeURIComponent(p.id),{method:'DELETE'});message('Product removed.');await loadProducts()}catch(e){message(e.message)}};
-   const image=document.createElement('img');image.src=p.image;image.alt=p.title;image.loading='lazy';image.style.cssText='max-width:140px;max-height:140px;object-fit:cover;border-radius:12px;margin-bottom:12px';
-   const summary=document.createElement('div');summary.className='product-summary';summary.textContent=p.title+' · '+(p.price===null?'Quote needed':bnd(Math.round(p.price*100)))+(p.visible===false?' · Hidden':'')+' · '+printingSummary(p);if(!p.id.startsWith('up-'))form.querySelector('.remove-product').hidden=true;const toggle=document.createElement('button');toggle.type='button';toggle.className='product-edit-toggle';toggle.textContent='Edit product';toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'Edit product':'Close editor'};card.append(image,summary,toggle,form);holder.append(card)
+   const image=document.createElement('img');image.src=p.image;image.alt=p.title;image.loading='lazy';image.className='pn-product-image';
+   const badge=document.createElement('span');badge.className='pn-catalog-badge';badge.textContent=p.archived===true?'Archived':p.visible===false?'Hidden':'On storefront';
+   if(p.archived===true)badge.classList.add('is-archived');
+   const summary=document.createElement('div');summary.className='product-summary';summary.textContent=p.title+' · '+(p.price===null?'Quote needed':bnd(Math.round(p.price*100)))+' · '+printingSummary(p);
+   if(!p.id.startsWith('up-'))form.querySelector('.remove-product').hidden=true;
+   const toggle=document.createElement('button');toggle.type='button';toggle.className='product-edit-toggle';toggle.textContent='Edit details';toggle.onclick=()=>{form.hidden=!form.hidden;toggle.textContent=form.hidden?'Edit details':'Close editor'};
+   const archive=document.createElement('button');archive.type='button';archive.className='pn-archive-button';archive.textContent=p.archived===true?'Restore product':'Archive product';
+   archive.onclick=async()=>{
+    const makeArchived=p.archived!==true;
+    if(!confirm(makeArchived?'Archive '+p.title+'? It will disappear from the storefront, but remain in Admin.':'Restore '+p.title+' to the storefront?'))return;
+    archive.disabled=true;
+    try{await api('product-archive',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id,archived:makeArchived})});
+      productFeedback(makeArchived?'Product archived and hidden from storefront.':'Product restored and available on storefront.');await loadProducts()}
+    catch(e){productFeedback('Archive failed: '+e.message,true);archive.disabled=false}
+   };
+   const actions=document.createElement('div');actions.className='pn-product-actions';actions.append(toggle,archive);
+   card.append(image,badge,summary,actions,form);holder.append(card);
   }
- }catch(e){message(e.message)}
 }
+
+// V9 product catalog: three form/action controls, searchable cards and 9-per-page browsing.
+function setupManagementLayout(){
+ const productsSection=$('products');
+ const addPanel=$('productForm').closest('.panel'),bundlePanel=$('bundleForm').closest('.panel'),catalogPanel=$('productList').closest('.panel');
+ const productActions=document.createElement('div');productActions.className='pn-workspace-actions';
+ productActions.innerHTML='<button type="button" data-mode="add">+ Add a Product</button><button type="button" data-mode="bundle">+ Create Gift Bundle</button><button type="button" data-mode="catalog">All Products</button>';
+ productsSection.insertBefore(productActions,addPanel);
+ addPanel.classList.add('pn-workspace-form');bundlePanel.classList.add('pn-workspace-form');
+ const catalogHeader=catalogPanel.querySelector('h2');catalogHeader.textContent='All Products';
+ const tools=document.createElement('div');tools.className='pn-catalog-controls';
+ tools.innerHTML=`<input id="catalogSearch" type="search" placeholder="Search product name, ID or description" aria-label="Search products">
+ <select id="catalogCategory" aria-label="Filter category"><option value="all">All categories</option><option>Clickers</option><option>Keychains</option><option>Gifts</option></select>
+ <select id="catalogType" aria-label="Product type"><option value="all">All types</option><option value="single">Single products</option><option value="bundle">Gift bundles</option></select>
+ <select id="catalogStatus" aria-label="Product status"><option value="all">All statuses</option><option value="active">Storefront / active</option><option value="hidden">Hidden</option><option value="archived">Archived</option></select>
+ <select id="catalogSort" aria-label="Sort products"><option value="name">Name A–Z</option><option value="category">Category</option><option value="price-asc">Price: Low–high</option><option value="price-desc">Price: High–low</option><option value="status">Archive status</option></select>
+ <input id="catalogMin" type="number" min="0" step="0.01" placeholder="Min BND" aria-label="Minimum price">
+ <input id="catalogMax" type="number" min="0" step="0.01" placeholder="Max BND" aria-label="Maximum price">
+ <button id="catalogGo" type="button">Search</button><button id="catalogClear" type="button">Clear filters</button>`;
+ catalogHeader.after(tools);
+ const meta=document.createElement('div');meta.className='pn-catalog-meta';meta.innerHTML='<span id="catalogCount">Loading products…</span>';
+ tools.after(meta);
+ const paging=document.createElement('div');paging.className='pn-pagination';
+ paging.innerHTML='<button id="catalogPrevious" type="button">← Previous</button><span id="catalogPageInfo">Page 1</span><button id="catalogNext" type="button">Next →</button>';
+ $('productList').after(paging);
+ const setMode=(mode,scroll=true)=>{
+  addPanel.hidden=mode!=='add';bundlePanel.hidden=mode!=='bundle';
+  for(const button of productActions.querySelectorAll('button'))button.classList.toggle('is-active',button.dataset.mode===mode);
+  if(scroll){if(mode==='catalog'){$('catalogSearch').focus({preventScroll:true});catalogPanel.scrollIntoView({behavior:'smooth',block:'start'})}else (mode==='add'?addPanel:bundlePanel).scrollIntoView({behavior:'smooth',block:'start'})}
+ };
+ productActions.querySelectorAll('button').forEach(button=>button.onclick=()=>setMode(button.dataset.mode));setMode('catalog',false);
+ for(const id of ['catalogSearch','catalogCategory','catalogType','catalogStatus','catalogSort','catalogMin','catalogMax']){
+  $(id).addEventListener('input',()=>{productCatalogPage=1;renderProductCatalog()});
+ }
+ $('catalogGo').onclick=()=>{productCatalogPage=1;renderProductCatalog()};
+ $('catalogPrevious').onclick=()=>{productCatalogPage--;renderProductCatalog();catalogPanel.scrollIntoView({behavior:'smooth',block:'start'})};
+ $('catalogNext').onclick=()=>{productCatalogPage++;renderProductCatalog();catalogPanel.scrollIntoView({behavior:'smooth',block:'start'})};
+ $('catalogClear').onclick=()=>{
+  $('catalogSearch').value='';$('catalogCategory').value='all';$('catalogType').value='all';$('catalogStatus').value='all';$('catalogSort').value='name';$('catalogMin').value='';$('catalogMax').value='';
+  productCatalogPage=1;renderProductCatalog();
+ };
+
+ const inventory=$('inventory'),printer=$('printerForm').closest('.panel'),roll=$('rollForm').closest('.panel'),stock=$('stockForm').closest('.panel');
+ const rollPanel=$('rollList').closest('.panel'),stockList=$('stockList');
+ const inventoryActions=document.createElement('div');inventoryActions.className='pn-workspace-actions';
+ inventoryActions.innerHTML='<button type="button" data-mode="printer">Printer & Electricity Settings</button><button type="button" data-mode="roll">+ Add Filament Roll</button><button type="button" data-mode="stock">+ Add Other Inventory</button>';
+ inventory.insertBefore(inventoryActions,printer);
+ printer.classList.add('pn-workspace-form');roll.classList.add('pn-workspace-form');stock.classList.add('pn-workspace-form');
+ const otherPanel=document.createElement('div');otherPanel.className='panel pn-other-list';
+ const otherHeader=document.createElement('h2');otherHeader.textContent='All Other Inventory';otherPanel.append(otherHeader);
+ const otherFilters=document.createElement('div');otherFilters.className='pn-inventory-controls';
+ otherFilters.innerHTML='<input id="otherStockSearch" type="search" placeholder="Search boxes, accessories or supplies" aria-label="Search other inventory"><select id="otherStockCategory" aria-label="Other inventory category"><option value="all">All categories</option><option>Packaging</option><option>Accessories</option><option>Supplies</option><option>Equipment</option><option>Filament</option><option>Other</option></select><select id="otherStockStatus" aria-label="Other inventory status"><option value="all">All stock levels</option><option value="available">Available</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>';
+ otherPanel.append(otherFilters);
+ const otherCount=document.createElement('p');otherCount.id='otherStockCount';otherCount.className='pn-catalog-meta';otherPanel.append(otherCount);
+ otherPanel.append(stockList);
+ rollPanel.after(otherPanel);
+ const filamentHeader=rollPanel.querySelector('h2');filamentHeader.textContent='All Filament Stock';
+ const filamentFilters=document.createElement('div');filamentFilters.className='pn-inventory-controls';
+ filamentFilters.innerHTML='<input id="filamentStockSearch" type="search" placeholder="Search filament, material or colour" aria-label="Search filament"><select id="filamentStockStatus" aria-label="Filament stock status"><option value="all">All stock levels</option><option value="available">Available</option><option value="low">Low stock</option><option value="out">Out of stock</option></select>';
+ filamentHeader.after(filamentFilters);
+ const filamentCount=document.createElement('p');filamentCount.id='filamentStockCount';filamentCount.className='pn-catalog-meta';filamentFilters.after(filamentCount);
+ const setInventoryMode=mode=>{
+  for(const [panel,name] of [[printer,'printer'],[roll,'roll'],[stock,'stock']])panel.hidden=mode!==name;
+  for(const button of inventoryActions.querySelectorAll('button'))button.classList.toggle('is-active',button.dataset.mode===mode);
+ };
+ inventoryActions.querySelectorAll('button').forEach(b=>b.onclick=()=>setInventoryMode(b.dataset.mode));setInventoryMode('none');
+ for(const id of ['filamentStockSearch','filamentStockStatus','otherStockSearch','otherStockCategory','otherStockStatus'])$(id).addEventListener('input',filterInventoryLists);
+}
+function filterInventoryLists(){
+ if(!$('filamentStockCount'))return;
+ const filter=(holder,term,status,category)=>{
+  let total=0,shown=0;
+  for(const card of holder.querySelectorAll('.inventory-item')){
+   total++;
+   const match=(!term||card.dataset.search?.includes(term))&&(status==='all'||card.dataset.stockStatus===status)&&(category==='all'||card.dataset.category===category);
+   card.hidden=!match;if(match)shown++;
+  }
+  return shown+' of '+total+' stock records';
+ };
+ $('filamentStockCount').textContent=filter($('rollList'),$('filamentStockSearch').value.trim().toLowerCase(),$('filamentStockStatus').value,'all');
+ $('otherStockCount').textContent=filter($('stockList'),$('otherStockSearch').value.trim().toLowerCase(),$('otherStockStatus').value,$('otherStockCategory').value);
+}
+
 function inventoryFeedback(text,error=false){const el=$('inventoryFeedback');el.hidden=!text;el.textContent=text;el.classList.toggle('finance-error',error)}
 const grams=mg=>(Number(mg||0)/1000).toFixed(2)+' g';
 const timeDisplay=m=>{m=Number(m)||0;return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'};
@@ -295,6 +420,8 @@ async function loadInventory(){
   if(!d.rolls.length)rolls.textContent='No filament rolls yet.';
   for(const roll of d.rolls){
    const card=document.createElement('article');card.className='inventory-item';
+   card.dataset.search=[roll.label,roll.material,roll.color].join(' ').toLowerCase();
+   card.dataset.stockStatus=Number(roll.remaining_mg)===0?'out':Number(roll.remaining_mg)<=100000?'low':'available';
    const content=document.createElement('div');content.className='inventory-item-content';
    const title=document.createElement('strong');title.textContent=roll.label+(roll.remaining_mg===0?' · OUT OF STOCK':roll.remaining_mg<=100000?' · LOW STOCK':'');
    const info=document.createElement('small');info.textContent=roll.material+' · '+roll.color+' · '+grams(roll.remaining_mg)+' / '+grams(roll.initial_mg)+' remaining'+(roll.purchase_cost_cents==null?'':' · Purchased '+bnd(roll.purchase_cost_cents));
@@ -320,6 +447,9 @@ async function loadInventory(){
   if(!stock.items.length)items.textContent='No other inventory items yet. Add boxes, accessories or supplies above.';
   for(const item of stock.items){
    const card=document.createElement('article');card.className='inventory-item';
+   card.dataset.search=[item.name,item.category,item.unit,item.notes].join(' ').toLowerCase();
+   card.dataset.category=item.category;
+   card.dataset.stockStatus=Number(item.quantity)===0?'out':Number(item.quantity)<=5?'low':'available';
    const content=document.createElement('div');content.className='inventory-item-content';
    const title=document.createElement('strong');title.textContent=item.name+' · '+item.quantity+' '+item.unit+(item.quantity===0?' · OUT OF STOCK':item.quantity<=5?' · LOW STOCK':'');
    const line=document.createElement('small');line.textContent=item.category+(item.unit_cost_cents==null?'':' · '+bnd(item.unit_cost_cents)+' / '+item.unit)+(item.notes?' · '+item.notes:'');
@@ -348,6 +478,7 @@ async function loadInventory(){
     }catch(e){inventoryFeedback(e.message,true)}finally{buy.disabled=false}
    };controls.append(buy);card.append(controls);items.append(card);
   }
+  filterInventoryLists();
   const history=$('runList');history.replaceChildren();
   if(!d.runs.length)history.textContent='No print jobs recorded yet.';
   for(const run of d.runs){
@@ -492,4 +623,5 @@ $('expenseForm').onsubmit=async e=>{e.preventDefault();const f=e.target,btn=f.qu
 };
 $('expenseForm').querySelector('[name=occurred_on]').value=bruneiDate();
 $('jobCostForm').querySelector('[name=occurred_on]').value=bruneiDate();
+setupManagementLayout();
 start();
