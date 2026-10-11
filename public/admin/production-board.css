@@ -1,0 +1,41 @@
+/* PrintNest V8 Production Board — separate from Orders */
+.production-intro{background:#fff;border:1px solid #e8e2f1;border-radius:16px;padding:18px 20px;margin-bottom:16px}
+.production-intro p{color:#77718c;line-height:1.6;margin:7px 0 0}
+.production-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:11px;margin-bottom:17px}
+.production-summary article{background:white;border:1px solid #e7e2ef;border-radius:13px;padding:15px}
+.production-summary small{display:block;color:#7a7491}.production-summary strong{font-size:23px;display:block;margin-top:7px}
+.production-board-toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:15px}
+.production-board-toolbar input{flex:1 1 280px}.production-board-toolbar select{min-width:160px}
+.production-board-notice{background:#f2faf6;color:#24583c;border:1px solid #bee0cb;border-radius:12px;padding:13px 15px;margin:10px 0}
+.production-board-notice.error,.production-inline-feedback.error{background:#fff6f5;color:#922d39;border-color:#e9b8bf}
+.production-board-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:13px;align-items:start}
+.production-lane{background:#f0ecf8;border:1px solid #e3dded;border-radius:14px;padding:12px;min-width:0}
+.production-lane-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.production-lane h3{margin:0;font-size:15px}.production-count{border-radius:99px;padding:5px 10px;background:white;font-weight:800;color:#6b51b7}
+.production-empty{color:#7e7594;font-size:12px;padding:16px;text-align:center}
+.production-card{background:white;border:1px solid #e9e2f1;border-radius:13px;padding:14px;margin-bottom:11px;min-width:0;overflow-wrap:anywhere}
+.production-card.is-urgent{border-left:4px solid #e78e47}
+.production-card-header{display:flex;align-items:start;justify-content:space-between;gap:8px;font-size:12px}
+.production-card-header strong{min-width:0;word-break:break-word}
+.production-stage{flex-shrink:0;background:#ede6fe;color:#5e43b2;border-radius:30px;padding:5px 7px;font-weight:700;font-size:10px}
+.production-customer{font-weight:700;margin-top:11px;line-height:1.55}
+.production-products{font-size:12px;color:#777084;line-height:1.5;margin:5px 0 12px}
+.production-card-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.production-kv{padding:8px;background:#f8f6fc;border-radius:8px;min-width:0}
+.production-kv small{display:block;color:#847a95;font-size:10px;margin-bottom:4px}
+.production-kv strong{font-size:11px;overflow-wrap:anywhere}
+.production-mini,.production-notes{font-size:12px;color:#736a85;line-height:1.6}
+.production-cost{margin:12px 0;padding-top:10px;border-top:1px solid #ede8f3;display:grid;gap:5px;font-size:12px}
+.production-cost strong{color:#254f40}
+.production-card-actions{display:flex;flex-wrap:wrap;gap:7px;margin:10px 0 0}
+.production-card-actions button{flex:1 1 110px;min-width:0;border:1px solid #ded4f1;background:#f6f2ff;color:#6649ad;border-radius:9px;padding:10px;font-weight:700;font-size:12px}
+.production-card-actions .primary{background:#7856e6;color:white;border-color:#7856e6}
+.production-card-actions button:disabled{opacity:.6;cursor:progress}
+.production-card-editor{background:#faf8ff;padding:12px;border-radius:10px;border:1px solid #e5dcee;margin-top:12px}
+.production-card-editor h4{margin:0 0 12px}.production-edit-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.production-edit-fields label{min-width:0;margin:0;font-size:11px}.production-edit-fields label:last-child{grid-column:1/-1}
+.production-edit-fields input,.production-edit-fields textarea,.production-edit-fields select{width:100%;min-width:0;padding:10px}
+.production-inline-feedback{padding:10px;background:#f3f9f5;color:#345e4a;border:1px solid #cbe1d4;border-radius:9px;font-size:12px;line-height:1.6;margin-top:10px}
+@media(max-width:1350px){.production-board-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:950px){.production-board-grid{grid-template-columns:1fr}.production-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:460px){.production-edit-fields{grid-template-columns:1fr}.production-summary article{padding:11px}.production-board-toolbar input{min-width:100%}}

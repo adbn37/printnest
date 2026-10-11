@@ -17,6 +17,7 @@ export async function onRequestPatch({request,env}){
   const db=env.PRINTNEST_DB,order=await db.prepare('SELECT * FROM orders WHERE id=?').bind(id).first();
   if(!order)return invalid('Order not found',404);
   if(!['developer','master_admin'].includes(g.user.role)&&payment!==order.payment_status)return invalid('Only master admin may change payment status',403);
+  if(['collected','delivered'].includes(stage)&&stage!==order.fulfillment_status)return invalid('Confirm customer collection or delivery through Production Board.',409);
   const result=await saveOrderStatusWithProduction(db,order,{payment,stage,email:g.user.email});
   return json({ok:true,...result});
  }catch{return invalid('Production could not start. Stock may have changed; check materials and retry. Confirm V3 migration is installed.',409)}

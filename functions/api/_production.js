@@ -1,6 +1,7 @@
 import {summarizeItems} from './_printing.js';
 import {checkAvailability} from './_materials.js';
 import {orderExtras} from './_order_extras.js';
+import {postPrintStages,prePrintStages,nextProductionStage} from './_production_flow.js';
 const today=()=>new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Brunei'}).format(new Date());
 const audit=(db,email,action,id,detail)=>db.prepare('INSERT INTO portal_audit(actor_email,action,entity_id,detail) VALUES(?,?,?,?)').bind(email,action,id,JSON.stringify(detail));
 export async function inspectOrderMaterials(db,order){
@@ -20,6 +21,26 @@ export async function inspectOrderMaterials(db,order){
 export async function saveOrderStatusWithProduction(db,order,{payment,stage,email}){
  const update=(s)=>db.prepare("UPDATE orders SET payment_status=?,fulfillment_status=?,verified_at=CASE WHEN ?='verified' AND payment_status!='verified' THEN datetime('now') WHEN ?!='verified' THEN NULL ELSE verified_at END WHERE id=?").bind(payment,s,payment,payment,order.id);
  const action=(s)=>audit(db,email,'order.status',order.id,{payment_status:payment,fulfillment_status:s,requested_stage:stage});
+ // Protect production and handover from being marked done without ever printing.
+ const existingRun=await db.prepare('SELECT order_id FROM printnest_production_runs WHERE order_id=?').bind(order.id).first();
+ // Existing legacy completed orders may lack a production run; a no-op save must not
+ // retroactively charge them or unexpectedly deduct inventory.
+ if(stage==='completed'&&order.fulfillment_status==='completed'&&!existingRun){
+  await db.batch([update(stage),action(stage)]);return {registered:false,legacy:true};
+ }
+ if(existingRun&&prePrintStages.includes(stage)&&stage!==order.fulfillment_status)
+  return {registered:false,blocked:true,reason:'This job has already started printing. Do not move it back to a pre-print stage; stock is already deducted.'};
+ if(postPrintStages.includes(stage)&&stage!==order.fulfillment_status){
+  if(!existingRun)return {registered:false,blocked:true,reason:'Start Printing and record its materials before advancing to finishing or customer handover.'};
+  const config=await db.prepare('SELECT handover_method FROM printnest_production_jobs WHERE order_id=?').bind(order.id).first();
+  const expected=nextProductionStage(order.fulfillment_status,config?.handover_method||'collection');
+  if(stage!==expected)return {registered:false,blocked:true,reason:'The next allowed stage is '+String(expected||'none').replaceAll('_',' ')+'. Use the Production Board workflow.'};
+ }
+ if(stage==='ready_to_print'&&!existingRun){
+  const check=await inspectOrderMaterials(db,order);
+  if(!check.available){await db.batch([update('awaiting_materials'),action('awaiting_materials')]);
+    return {registered:false,blocked:true,reason:'Resolve missing materials before Ready to Print.',shortages:check.shortages,missing_products:check.missing_products};}
+ }
  if(!['printing','completed'].includes(stage)){
   await db.batch([update(stage),action(stage)]);return {registered:false};
  }
