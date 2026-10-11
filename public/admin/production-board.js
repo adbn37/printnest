@@ -12,9 +12,13 @@
   function notify(message,error=false){const el=$('productionBoardNotice');el.hidden=false;el.classList.toggle('error',error);el.textContent=message;}
   async function api(path,options={}){
     const token=sessionStorage.getItem('printnest_google_credential');
-    if(!token)throw Error('Google login expired. Please sign in again.');
+    if(!token){window.PrintNestHandleAuthExpired?.();throw Error('Your Google session expired. Please sign in again.')}
     const response=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+token,...options.headers},cache:'no-store'});
     let body;try{body=await response.json()}catch{throw Error('Unexpected server response ('+response.status+')')}
+    if(response.status===401){
+      if(sessionStorage.getItem('printnest_google_credential')===token)window.PrintNestHandleAuthExpired?.();
+      throw Error('Your Google session expired. Please sign in again.');
+    }
     if(!response.ok)throw Error(body.error||'Request failed ('+response.status+')');return body;
   }
   const appendKV=(parent,label,value)=>{const block=element('div','production-kv');block.append(element('small','',label),element('strong','',value));parent.append(block)};

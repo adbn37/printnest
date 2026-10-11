@@ -1,9 +1,19 @@
 const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 let jwt='',me=null,orders=[],products=[];const bnd=c=>'BND '+((Number(c)||0)/100).toFixed(2);
-function message(s){$('notice').textContent=s;$('loginMessage').textContent=s}async function api(path,options={}){const r=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+jwt,...options.headers},cache:'no-store'});let data;try{data=await r.json()}catch{throw Error('Invalid response ('+r.status+')')}if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data}
+function message(s){$('notice').textContent=s;$('loginMessage').textContent=s}async function api(path,options={}){const requestCredential=jwt;const r=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+requestCredential,...options.headers},cache:'no-store'});let data;try{data=await r.json()}catch{throw Error('Invalid response ('+r.status+')')}if(r.status===401){if(jwt===requestCredential)forceReauthentication();throw Error('Your Google session expired. Please sign in again.')}if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data}
 function section(name){document.querySelectorAll('.section').forEach(x=>x.hidden=x.id!==name);document.querySelectorAll('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===name));$('sectionTitle').textContent=name[0].toUpperCase()+name.slice(1);document.querySelector('.sidebar').classList.remove('open');if(name==='orders'){loadOrders();loadOrderProducts()}if(name==='products')loadProducts();if(name==='overview')loadOrders();if(name==='inventory')loadInventory();if(name==='finance'){loadFinance();toggleFinancePurchase()}if(name==='production-board')window.PrintNestProductionBoard?.load()}
 const SESSION_KEY='printnest_google_credential';
 function clearSession(){sessionStorage.removeItem(SESSION_KEY);jwt='';me=null;orders=[]}
+function forceReauthentication(){
+ // A short-lived Google ID token has expired. Never leave stale admin screens interactive.
+ clearSession();
+ $('portal').hidden=true;
+ $('signin').hidden=false;
+ $('notice').textContent='';
+ $('loginMessage').textContent='Your Google session expired. Please sign in again to continue.';
+ window.google?.accounts?.id?.disableAutoSelect?.();
+}
+window.PrintNestHandleAuthExpired=forceReauthentication;
 async function signIn(credential){
  jwt=credential;
  try{
@@ -12,14 +22,18 @@ async function signIn(credential){
   $('signin').hidden=true;$('portal').hidden=false;
   $('userEmail').textContent=me.email;
   $('roleBadge').textContent=me.role==='developer'?'Developer':'Master Admin';
+  message('');
   await loadOrders();
+  const activeSection=document.querySelector('.section:not([hidden])')?.id;
+  if(activeSection && !['overview','orders'].includes(activeSection))section(activeSection);
  }catch(e){clearSession();$('portal').hidden=true;$('signin').hidden=false;message(e.message)}
 }
 async function start(){
  const cached=sessionStorage.getItem(SESSION_KEY);
  if(cached){
   await signIn(cached);
-  if(me)return;
+  // Always initialize Google Sign-In, even when the cached token was initially valid.
+  // Otherwise the sign-in button cannot be used when that token later expires.
  }
  try{
   const r=await fetch('/api/portal/config');const c=await r.json();
