@@ -112,3 +112,21 @@
 #orderList>.order .order-material-summary.is-short{background:#fff9f1;border-color:#edd1a3;color:#80521d}
 @media(max-width:1100px){#orderList.order-grid{grid-template-columns:1fr}#orderList>.order.is-editing{grid-column:auto}}
 @media(max-width:650px){#orderList>.order{padding:16px}#orderList>.order .order-details-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#orderList>.order .extras-edit{padding:13px}#orderList>.order .order-extra-actions{grid-template-columns:repeat(2,minmax(0,1fr))}#orderList>.order .extras-edit .recipe-row{grid-template-columns:minmax(0,1fr) 95px auto;gap:6px;padding:9px}#orderList>.order .order-estimate-item .creality-grid{grid-template-columns:1fr 1fr 1fr;gap:6px}}
+
+
+/* PrintNest V7 - sectional order editor and cost audit */
+/* Editor remains wide on desktop and scrolls naturally on mobile. */
+#orderList>.order.is-editing .extras-edit{display:block;padding:24px;background:#faf9fe}
+#orderList>.order .order-editor-section{background:#fff;border:1px solid #e8e2f2;border-radius:15px;padding:20px;margin:18px 0;min-width:0}
+#orderList>.order .order-editor-heading{display:flex;align-items:flex-start;gap:13px;margin-bottom:13px}
+#orderList>.order .order-step{display:grid;place-items:center;flex:0 0 38px;width:38px;height:38px;border-radius:12px;color:#6b42c0;background:#eee7fc;font-weight:800;font-size:12px}
+#orderList>.order .order-editor-heading h4{margin:0 0 4px;font-size:16px;color:#232039}
+#orderList>.order .order-editor-heading p{margin:0;font-size:13px}
+#orderList>.order .order-material-rows{margin:10px 0 14px;display:grid;gap:10px}
+#orderList>.order .order-add-material{width:100%;padding:12px;margin:3px 0 0}
+#orderList>.order .order-save-materials{display:block;width:100%;padding:13px;margin:16px 0 10px}
+#orderList>.order .order-finance-panel{white-space:pre-line;line-height:1.8;color:#29233d;background:#f6fbf8;border:1px solid #c9e0d5;border-radius:12px;padding:16px;margin-top:12px;font-weight:550}
+#orderList>.order .order-extra-actions{grid-template-columns:repeat(4,minmax(0,1fr))}
+#orderList>.order .extras-edit .order-editor-section .recipe-row{grid-template-columns:minmax(0,3fr) minmax(115px,1fr) auto}
+@media(max-width:1000px){#orderList>.order .order-extra-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:650px){#orderList>.order .order-editor-section{padding:13px}#orderList>.order .order-editor-heading h4{font-size:15px}#orderList>.order .extras-edit .order-editor-section .recipe-row{grid-template-columns:minmax(0,1fr) 90px auto;gap:7px}#orderList>.order .order-extra-actions{grid-template-columns:repeat(2,minmax(0,1fr))}}

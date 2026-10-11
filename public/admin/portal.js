@@ -49,9 +49,18 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
   try{
    const [rolls,stock,saved,catalog]=await Promise.all([api('production'),api('inventory'),api('order-extras?id='+encodeURIComponent(o.id)),api('products')]);
    editor.replaceChildren();
+   function editorSection(number,title,explanation){
+    const block=document.createElement('section');block.className='order-editor-section';
+    const top=document.createElement('div');top.className='order-editor-heading';
+    const idx=document.createElement('span');idx.className='order-step';idx.textContent=number;
+    const labels=document.createElement('div');const heading=document.createElement('h4');heading.textContent=title;
+    const desc=document.createElement('p');desc.className='muted';desc.textContent=explanation;
+    labels.append(heading,desc);top.append(idx,labels);block.append(top);editor.append(block);return block;
+   }
    const heading=document.createElement('strong');heading.textContent='Materials and accessories for this order';editor.append(heading);
    const hint=document.createElement('p');hint.className='muted';hint.textContent='Step 1: Enter the Creality values for each item. Step 2: Choose each filament colour and its grams. Step 3: Add optional box / packaging only if requested. Step 4: Save and check materials. Existing stock is NOT an error by itself.';editor.append(hint);
-   const estimateSection=document.createElement('div');estimateSection.className='order-estimate-items';editor.append(estimateSection);
+   const printSection=editorSection('01','Printing Details','Enter weight, time and printing cost from Creality for each unit. Orders retain their own estimates.');
+   const estimateSection=document.createElement('div');estimateSection.className='order-estimate-items';printSection.append(estimateSection);
    const estimateRows=[];
    for(const [ix,line] of (o.items||[]).entries()){
     const row=document.createElement('div');row.className='order-estimate-item';
@@ -72,7 +81,14 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
     }
     estimateSection.append(row);estimateRows.push(input);
    }
-   const rows=document.createElement('div');rows.className='recipe-stack';editor.append(rows);
+   const filamentSection=editorSection('02','Filament Selection','Choose the actual colour(s) used for this order. Combined grams must match the Creality weight.');
+   const accessorySection=editorSection('03','Optional Accessories','Add a box, plastic or another inventory item only when this customer needs it.');
+   const summarySection=editorSection('04','Production Summary','Review printing estimates and materials before saving. These are internal costs, not extra customer charges.');
+   const rows=editor; // Query both material sections.
+   const filamentRows=document.createElement('div');filamentRows.className='recipe-stack order-material-rows';
+   const accessoryRows=document.createElement('div');accessoryRows.className='recipe-stack order-material-rows';
+   filamentSection.append(filamentRows);accessorySection.append(accessoryRows);
+
    const filamentChoices=new Map();for(const r of rolls.rolls||[]){const key=JSON.stringify([r.material,r.color]);const entry=filamentChoices.get(key)||{name:r.material+' · '+r.color,grams:0};entry.grams+=Number(r.remaining_mg||0)/1000;filamentChoices.set(key,entry)}
    const accessoryChoices=(stock.items||[]).filter(x=>x.category!=='Filament');
    function addRow(kind,item=null){
@@ -85,19 +101,22 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
     const qlabel=document.createElement('label');qlabel.textContent=kind==='filament'?'Weight (g)':'Quantity';
     const q=document.createElement('input');q.type='number';q.className='material-qty';q.min=kind==='filament'?'0.001':'1';q.step=kind==='filament'?'0.001':'1';q.value=item?(kind==='filament'?Number(item.quantity_mg/1000).toFixed(3):item.quantity_units):'';qlabel.append(q);
     const remove=document.createElement('button');remove.type='button';remove.textContent='Remove';remove.onclick=()=>wrap.remove();
-    wrap.append(label,qlabel,remove);rows.append(wrap);
+    wrap.append(label,qlabel,remove);(kind==='filament'?filamentRows:accessoryRows).append(wrap);
    }
    for(const m of saved.items||[])addRow(m.kind==='filament'?'filament':'item',m);
-   const liveSummary=document.createElement('div');liveSummary.className='order-material-summary';liveSummary.setAttribute('role','status');editor.insertBefore(liveSummary,rows);
+   const liveSummary=document.createElement('div');liveSummary.className='order-material-summary';liveSummary.setAttribute('role','status');summarySection.append(liveSummary);
    function updateMaterialSummary(){
-     const summary=[],errors=[];let expectedMg=0,assignedMg=0,complete=true;
+     const summary=[],errors=[];let expectedMg=0,assignedMg=0,complete=true,minutes=0,printCents=0;
      for(let ix=0;ix<estimateRows.length;ix++){
        const inputs=estimateRows[ix],w=String(inputs.print_weight_g.value).trim(),m=String(inputs.print_minutes.value).trim(),c=String(inputs.print_cost.value).trim();
        if(!w||!m||c===''||!Number.isFinite(Number(w))||Number(w)<=0||!Number.isFinite(Number(m))||Number(m)<=0||!Number.isFinite(Number(c))||Number(c)<0){complete=false;continue}
-       expectedMg+=Math.round(Number(w)*1000)*Number(o.items[ix].quantity||1);
+       const qty=Number(o.items[ix].quantity||1);
+       expectedMg+=Math.round(Number(w)*1000)*qty;
+       minutes+=Number(m)*qty;
+       printCents+=Math.round(Number(c)*100)*qty;
      }
-     const seen=new Set();
-     for(const row of rows.children){if(row.dataset.kind!=='filament')continue;
+     const seen=new Set();let accessoryCents=0,unpriced=0;
+     for(const row of rows.querySelectorAll('.recipe-row')){if(row.dataset.kind!=='filament')continue;
        const value=row.querySelector('.material-stock').value;
        const weight=Number(row.querySelector('.material-qty').value||0);
        if(!value||!Number.isFinite(weight)||weight<=0)continue;
@@ -108,6 +127,26 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
        const matching=(rolls.rolls||[]).filter(r=>r.material.toLowerCase()===String(material).toLowerCase()&&r.color.toLowerCase()===String(color).toLowerCase());
        const biggest=Math.max(0,...matching.map(r=>Number(r.remaining_mg||0)));
        if(biggest<neededMg)errors.push(material+' '+color+': needs '+(neededMg/1000).toFixed(3)+' g; largest available matching roll has '+(biggest/1000).toFixed(3)+' g.');
+     }
+     for(const row of accessoryRows.querySelectorAll('.recipe-row')){
+       const item=accessoryChoices.find(i=>i.id===row.querySelector('.material-stock').value);
+       const amount=Number(row.querySelector('.material-qty').value);
+       if(!item||!Number.isSafeInteger(amount)||amount<1)continue;
+       if(amount>Number(item.quantity||0))errors.push(item.name+': requires '+amount+' '+item.unit+'; only '+item.quantity+' '+item.unit+' in stock.');
+       if(item.unit_cost_cents==null)unpriced+=1;
+       else accessoryCents+=Number(item.unit_cost_cents)*amount;
+     }
+     if(complete){
+       const settings=rolls.settings||{};
+       const electricityCents=settings.add_electricity&&Number(settings.average_watts)>0
+         ?Math.round(Number(settings.average_watts)*minutes*Number(settings.tariff_cents_per_kwh||0)/60000):0;
+       const hourText=Math.floor(minutes/60)+'h '+String(minutes%60).padStart(2,'0')+'m';
+       summary.push('Estimated print time: '+hourText+' ('+minutes+' minutes).');
+       summary.push('Creality printing cost: '+bnd(printCents)+'.');
+       summary.push('Optional accessory cost: '+bnd(accessoryCents)+(unpriced?' + '+unpriced+' unpriced item(s)':'')+'.');
+       if(electricityCents)summary.push('Additional electricity: '+bnd(electricityCents)+'.');
+       summary.push('Estimated recorded direct cost: '+bnd(printCents+accessoryCents+electricityCents)+(unpriced?' (excludes unpriced accessories)':'')+'.');
+       summary.push('Stock will be deducted only when production starts; saving this editor does not deduct stock.');
      }
      if(!complete)summary.push('Printing estimates: enter weight, time and cost for every product.');
      else summary.push('Total Creality weight required: '+(expectedMg/1000).toFixed(3)+' g.');
@@ -121,14 +160,15 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
    editor.addEventListener('change',updateMaterialSummary);
    editor.addEventListener('click',()=>queueMicrotask(updateMaterialSummary));
    updateMaterialSummary();
-   const buttons=document.createElement('div');buttons.className='order-extra-actions';
-   for(const [label,kind] of [['+ Filament colour','filament'],['+ Box / accessory','item']]){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=()=>addRow(kind);buttons.append(b)}
-   const save=document.createElement('button');save.type='button';save.className='primary';save.textContent='Save order materials';buttons.append(save);
-   const notice=document.createElement('div');notice.className='muted';notice.setAttribute('role','status');editor.append(buttons,notice);
+   for(const [label,kind,section] of [['+ Add filament colour','filament',filamentSection],['+ Add box / accessory','item',accessorySection]]){
+    const b=document.createElement('button');b.type='button';b.className='secondary-action order-add-material';b.textContent=label;b.onclick=()=>addRow(kind);section.append(b);
+   }
+   const save=document.createElement('button');save.type='button';save.className='primary order-save-materials';save.textContent='Save order materials';summarySection.append(save);
+   const notice=document.createElement('div');notice.className='muted';notice.setAttribute('role','status');summarySection.append(notice);
    save.onclick=async()=>{
     try{
      const estimates=estimateRows.map(fields=>Object.fromEntries(Object.entries(fields).map(([name,node])=>[name,node.value])));
-     const items=[];for(const row of rows.children){const choice=row.querySelector('.material-stock').value,qty=row.querySelector('.material-qty').value;
+     const items=[];for(const row of rows.querySelectorAll('.recipe-row')){const choice=row.querySelector('.material-stock').value,qty=row.querySelector('.material-qty').value;
       if(!choice||!qty)throw Error('Select every filament or accessory and enter its quantity.');
       if(row.dataset.kind==='filament'){const [material,color]=JSON.parse(choice);items.push({kind:'filament',material,color,grams:qty})}
       else items.push({kind:'item',item_id:choice,quantity_units:qty});
@@ -147,6 +187,35 @@ function renderOrders(){const q=$('search').value.trim().toLowerCase(),f=$('paym
     }catch(e){notice.textContent='Could not save: '+e.message}finally{save.disabled=false;save.textContent='Save order materials'}
    };
   }catch(e){editor.textContent='Could not load materials: '+e.message}
+ };
+ const financeButton=document.createElement('button');financeButton.type='button';financeButton.className='order-finance-check';financeButton.textContent='View Finance costs';
+ el.querySelector('.order-extra-actions').append(financeButton);
+ const financeBox=document.createElement('div');financeBox.className='order-finance-panel';financeBox.hidden=true;
+ el.querySelector('.material-check').after(financeBox);
+ financeButton.onclick=async()=>{
+  if(!financeBox.hidden){financeBox.hidden=true;return}
+  financeBox.hidden=false;financeBox.textContent='Loading the saved production and Finance records…';
+  try{
+   const info=await api('order-costs?id='+encodeURIComponent(o.id));
+   const parts=[];
+   parts.push('FINANCE & PRODUCTION RECORD — '+o.id);
+   parts.push('Payment: '+String(info.payment_status||'unknown').replaceAll('_',' '));
+   if(info.production){
+    const job=info.production;
+    parts.push('Production date: '+job.occurred_on);
+    parts.push('Creality printing cost: '+bnd(job.print_cost_cents));
+    parts.push('Electricity: '+bnd(job.electricity_cents));
+    parts.push('Accessories / supplies consumed: '+bnd(job.stock_cost_cents));
+    parts.push('Weight deducted: '+(Number(job.weight_mg)/1000).toFixed(3)+' g');
+    parts.push('Printing time: '+job.print_minutes+' minutes');
+   }else parts.push('No production record yet. Opening Order materials alone does not create costs.');
+   if(info.material_usage?.length)parts.push('Inventory: '+info.material_usage.map(x=>x.label+' ('+(x.stock_kind==='filament'?(x.quantity_mg/1000).toFixed(3)+' g':x.quantity_units+' units')+')').join('; '));
+   parts.push('Additional manual job costs: '+bnd(info.manual_cost_cents));
+   parts.push('TOTAL DIRECT JOB COST: '+bnd(info.direct_cost_cents));
+   parts.push(info.payment_status==='verified'?'Verified sale: '+(info.total_cents==null?'No fixed price':bnd(info.total_cents)):'Revenue not counted yet — payment is not verified.');
+   parts.push('Finance uses these production records; this view is read-only and will not post an expense again.');
+   financeBox.textContent=parts.join('\n');
+  }catch(err){financeBox.textContent='Could not load order cost details: '+err.message}
  };
  el.querySelector('.stock-check').onclick=async()=>{const out=el.querySelector('.material-check');out.hidden=false;out.textContent='Checking stock…';
   try{const d=await api('material-check?id='+encodeURIComponent(o.id));out.classList.toggle('is-short',!d.available);
