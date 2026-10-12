@@ -46,3 +46,7 @@
 .bwnsite-order-promo p{font-size:12px;line-height:1.5;margin:0}
 .bwnsite-order-promo a{font-weight:800;font-size:12px;color:#6545af;text-decoration:underline;text-underline-offset:3px}
 @media(max-width:700px){.bwnsite-service-spotlight{padding:26px 0}.bwnsite-service-inner{align-items:stretch;flex-direction:column;gap:16px}.bwnsite-service-link{width:100%}}
+
+/* BWN Site: information website link beside the existing WhatsApp enquiry CTA. */
+.bwnsite-service-copy .bwnsite-info-link{font-weight:800;color:#6242cd;text-decoration:underline;text-underline-offset:3px;white-space:normal}
+.bwnsite-service-copy .bwnsite-info-link:hover{color:#442ba1}
