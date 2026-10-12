@@ -28,3 +28,21 @@
 
 /* V12.1: Don't render a broken-image icon or exposed alt text in product cards. */
 .shop-image-unavailable{display:flex;align-items:center;justify-content:center;text-align:center;width:100%;height:100%;padding:18px;font-size:13px;font-weight:700;line-height:1.5;color:#777080;background:#f1eafd}
+
+/* BWN Site visitor promotion. No cookies, tracking, customer data sharing or auto-messages. */
+.bwnsite-service-spotlight{padding:32px 0;background:linear-gradient(110deg,#eee9ff 0%,#f6f2ff 60%,#fdf9f3 100%);border-top:1px solid #eae2f7}
+.bwnsite-service-inner{display:flex;align-items:center;justify-content:space-between;gap:24px}
+.bwnsite-service-copy{max-width:720px}
+.bwnsite-service-label{font-size:10px;letter-spacing:1.5px;font-weight:800;color:#7053b4}
+.bwnsite-service-copy h2{font-size:clamp(22px,2.7vw,31px);line-height:1.2;letter-spacing:-.7px;margin:9px 0}
+.bwnsite-service-copy p{font-size:13px;line-height:1.65;color:#656077;margin:0}
+.bwnsite-service-link{display:inline-flex;align-items:center;justify-content:center;flex:none;border-radius:12px;padding:14px 18px;background:#7357d9;color:#fff;font-size:13px;font-weight:800;text-align:center;max-width:100%}
+.bwnsite-service-link:hover{background:#6242cd}
+.footer-right .bwnsite-credit{font-size:11px;color:#9992bc;margin-top:4px}
+.footer-right .bwnsite-credit a{color:#dcd4ff;text-decoration:underline;text-underline-offset:3px}
+.bwnsite-order-promo{display:grid;gap:7px;padding:13px 14px;margin-top:12px;background:#f6f2ff;border:1px solid #e3d9fc;border-radius:12px;color:#403263}
+.bwnsite-order-promo[hidden]{display:none!important}
+.bwnsite-order-promo strong{font-size:13px}
+.bwnsite-order-promo p{font-size:12px;line-height:1.5;margin:0}
+.bwnsite-order-promo a{font-weight:800;font-size:12px;color:#6545af;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:700px){.bwnsite-service-spotlight{padding:26px 0}.bwnsite-service-inner{align-items:stretch;flex-direction:column;gap:16px}.bwnsite-service-link{width:100%}}

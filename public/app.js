@@ -90,6 +90,7 @@ function drawer(show){$('drawer').classList.toggle('open',show);$('drawer').setA
 $('cartButton').onclick=()=>drawer(true);$('closeCart').onclick=()=>drawer(false);$('overlay').onclick=()=>drawer(false);
 function whatsapp(message){const url='https://wa.me/'+PHONE+'?text='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer')}
 $('checkout').onclick=async()=>{
+ $('bwnsiteAfterOrder').hidden=true;
  if(!bag.length)return toast('Add a product first');
  const name=$('checkoutName').value.trim(),phone=$('checkoutPhone').value.trim(),notes=$('checkoutNotes').value.trim(),proof=$('checkoutProof').files[0];
  if(name.length<2||!/^[+\d\s()-]{7,25}$/.test(phone))return toast('Enter your name and WhatsApp phone number');
@@ -99,6 +100,7 @@ $('checkout').onclick=async()=>{
  try{const response=await fetch('/api/orders',{method:'POST',body:form});const result=await response.json();if(!response.ok)throw Error(result.error||'Order could not be saved');
  const lines=bag.map(b=>{let p=products.find(x=>x.id===b.id);return p?`• ${p.title} × ${b.qty}${preferenceSummary(customDetails(b.customization))?'\n  '+preferenceSummary(customDetails(b.customization)):''}`:''}).filter(Boolean).join('\n');
  $('checkoutResult').textContent=`Order ${result.id} saved. Please press Send in WhatsApp to notify us.`;
+ $('bwnsiteAfterOrder').hidden=false;
  whatsapp(`Hello 3D PRINTNEST! New website order\nOrder ID: ${result.id}\nName: ${name}\nPhone: ${phone}\nItems:\n${lines}\nTotal: ${result.total===null?'Quotation required':'BND '+Number(result.total).toFixed(2)}\nPayment proof: ${proof?'Uploaded — please verify':'Not uploaded'}\nNotes: ${notes||'None'}\n\nPlease confirm this order. `);
  bag=[];save();
  }catch(e){$('checkoutResult').textContent=e.message;toast(e.message)}finally{button.disabled=false}
