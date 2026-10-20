@@ -50,3 +50,134 @@
 /* BWN Site: information website link beside the existing WhatsApp enquiry CTA. */
 .bwnsite-service-copy .bwnsite-info-link{font-weight:800;color:#6242cd;text-decoration:underline;text-underline-offset:3px;white-space:normal}
 .bwnsite-service-copy .bwnsite-info-link:hover{color:#442ba1}
+
+/* PRINTNEST BLUSH BRAND REDESIGN V13 — taste-skill + ui-ux-pro-max + design-motion-principles */
+/* Pastel palette, hierarchy, touch targets, motion restraint, reduced-motion access. */
+:root{
+ --dark:#352a32;--purple:#b85d82;--lav:#f8e7ed;
+ --cream:#fffbf9;--muted:#786e75;--line:#f0dfe4;
+ --pn-rose:#b85d82;--pn-deep:#783b56;--pn-pink:#e7a8bb;
+ --pn-blush:#f9e9ee;--pn-soft:#fff3f5;--pn-ink:#352a32;
+ --pn-border:#efdce2;--pn-shadow:0 18px 52px rgba(115,56,83,.10);
+}
+html{scroll-padding-top:90px}
+body{color:var(--pn-ink);background:#fffbf9}
+header{background:rgba(255,249,249,.93);border-bottom:1px solid var(--pn-border);box-shadow:0 2px 16px rgba(132,66,91,.03)}
+header .nav{height:86px}
+.brandmark{background:linear-gradient(145deg,#d898ab,#b65b80);box-shadow:inset 0 1px 1px #fff8,0 8px 20px #b65b8020;color:#fff;border-radius:15px}
+.brandmark span{color:#ffe9f1}
+.brand b{color:#49303b;font-family:'DM Sans',sans-serif;letter-spacing:-.055em}
+.brand small{color:#aa7489;letter-spacing:1.4px}
+nav a{transition:color .16s ease}
+nav a:hover,.footer-right a:hover{color:var(--pn-rose)}
+.text-btn{color:#8b737f}
+.cart-toggle{background:#59374a;box-shadow:0 5px 16px rgba(75,34,53,.12);min-height:44px}
+.cart-toggle span{color:#59374a}
+.hero{grid-template-columns:1.02fr .98fr;gap:clamp(20px,3vw,65px);padding-top:72px;padding-bottom:92px;min-height:625px}
+.hero-content{position:relative;z-index:1}
+.eyebrow{color:#9c496b;background:#fcebf0;border:1px solid #f4dbe3;letter-spacing:1.7px}
+.dot{background:#c77793}
+h1,h2,h3{font-family:'Playfair Display',Georgia,serif;letter-spacing:-.045em}
+h1{font-size:clamp(52px,5.7vw,83px);font-weight:700;line-height:1.13;margin:24px 0}
+h1 em,h2 em{color:#ba6486}
+.hero p{color:#796c73;max-width:480px;font-size:16px;line-height:1.85}
+.hero-actions{margin-top:35px}
+.btn{border-radius:12px;min-height:48px;transition:transform .18s ease,box-shadow .18s ease,background-color .18s ease}
+.btn:hover{transform:translateY(-2px)}
+.primary{background:#b65c80;color:#fff;box-shadow:0 5px 16px rgba(182,92,128,.14)}
+.primary:hover{background:#a54e73;box-shadow:0 9px 23px rgba(182,92,128,.2)}
+.secondary{background:#fff;border-color:#edcad8;color:#713d53}
+.secondary:hover{background:#fff3f6}
+.hero-mini{color:#897782;font-weight:600}
+.hero-art{min-height:485px;overflow:visible;isolation:isolate}
+.hero-art::before{content:"";position:absolute;inset:8% 0 0 0;background:radial-gradient(ellipse at center,#f9dbe5 0%,#fcecf1 42%,transparent 71%);z-index:-1;filter:blur(13px)}
+.hero-art .orbit,.hero-art .floating-star,.hero-art .art-label{display:none}
+.hero-art .hero-brand-logo{width:min(100%,510px);max-width:100%;height:auto;aspect-ratio:1;object-fit:contain;border:none;border-radius:28px;transform:none;box-shadow:0 28px 70px rgba(122,60,86,.14);background:#f3eaea;display:block}
+.strip{background:#f8e4eb;border-top:1px solid #f2d7e0;border-bottom:1px solid #f2d7e0}
+.strip-inner{color:#674354}
+.strip b{color:#bb6888}
+.section{padding-top:90px;padding-bottom:94px}
+.section-heading h2,.custom-copy h2,.center h2{font-weight:700;line-height:1.14}
+.section-heading p{color:#7c7078}
+.kicker{color:#ab5878}
+.shop-toolbar input,.shop-toolbar select{border:1px solid #ead3db;background:#fffdfd;color:#43333d;border-radius:12px}
+.shop-toolbar input:focus-visible,.shop-toolbar select:focus-visible{border-color:#b65c80;box-shadow:0 0 0 3px #e9afc36b}
+.filters .chip{background:#fffdfd;border:1px solid #f0dfe4;color:#785f6b;min-height:43px;transition:background-color .16s ease,border-color .16s ease,transform .16s ease}
+.filters .chip:hover{border-color:#d3a0b3;background:#fff3f7;transform:translateY(-1px)}
+.filters .chip.active{color:#fff;background:#a94f72;border-color:#a94f72}
+.product{border:1px solid #efdae2;border-radius:19px;background:#fffefe;box-shadow:0 3px 12px rgba(112,50,77,.03);transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease}
+.product:hover{transform:translateY(-4px);border-color:#e2b8c9;box-shadow:var(--pn-shadow)}
+.product-image{background:#faeaf0}
+.product-category{color:#75445a;background:rgba(255,250,252,.96);border:1px solid #f3dce4}
+.product-info h3{letter-spacing:-.025em;font-weight:700;color:#503441}
+.product-info p{color:#86747e}
+.price{color:#69364d}
+.add{background:#f9e0e9;color:#924767;border:1px solid #f1ccd9;min-height:44px;transition:background-color .18s ease,transform .18s ease}
+.add:hover{background:#f3cad9;transform:translateY(-1px)}
+.custom-wrap{background:linear-gradient(145deg,#fbe9ee,#fff4f6 65%,#f9e4eb)}
+.custom-copy p{color:#786e75}
+.mini-note{background:#fffafc;color:#7b5064;border:1px solid #efd6df}
+.custom-form,.modal-card{border:1px solid #f0dee5;box-shadow:var(--pn-shadow)}
+.custom-form h3{font-size:26px}
+.custom-form label,.drawer label,.modal-card label{color:#684e5c}
+.custom-form input,.custom-form textarea,.custom-form select,.drawer input,.drawer textarea,.modal-card input,.modal-card textarea,.modal-card select{border-color:#e9d4db;background:#fffdfd}
+.custom-form input:focus,.custom-form textarea:focus,.modal-card input:focus{border-color:#b65c80;box-shadow:0 0 0 3px rgba(196,110,145,.12)}
+.step-icon{color:#a34e71;background:#fbe2eb}
+.steps article{border-color:#efdae2;box-shadow:0 4px 16px rgba(112,50,77,.035)}
+.steps h3{letter-spacing:-.035em}
+footer{background:#47303e;color:#fff8fa}
+footer .brand b{color:#fff8fa}
+footer .brand small{color:#eac2d0}
+footer .brandmark{background:linear-gradient(145deg,#d98eaa,#b35a7d)}
+.footer-inner p{color:#dec7d1}
+.footer-right small{color:#d9b9c9}
+.footer-right .bwnsite-credit a{color:#ffd6e4}
+.drawer{background:#fffcfd;box-shadow:-10px 0 38px rgba(70,31,48,.16)}
+.iconbtn{background:#f8e9ee;color:#7b465c}
+.cart-line{border-color:#f0dfe4}
+.quantity-controls button{border-color:#e8cbd7;color:#773f56}
+.modal{background:rgba(55,31,42,.58)}
+.customize-intro{background:#fff6f8;border:1px solid #f0dce4}
+.customize-card form input,.customize-card form select,.customize-card form textarea{border-color:#ead4dd;color:#533b48}
+.customize-note{background:#fff4f1;border-color:#f0d9d6;color:#80565b}
+.bag-customization{background:#fff4f7;color:#775266}
+.bag-actions>button{background:#fbe7ee;border:1px solid #eccbd7;color:#8d4863}
+.order-personalizations{background:#fff4f7;border-color:#b96586}
+.order-summary{background:#fbe4ed}
+.shop-empty{border-color:#eccfdb;background:#fffdfd}
+.mobile-shop-link{color:#a34f73}
+.toast{background:#573247;color:white}
+/* BWN Site stays an optional, quiet referral instead of overtaking PrintNest branding. */
+.bwnsite-service-spotlight{background:linear-gradient(110deg,#fff1f5 0%,#fbe8ee 55%,#fff8f6 100%);border-top:1px solid #efdae2}
+.bwnsite-service-label{color:#a65575}
+.bwnsite-service-copy h2{color:#503441}
+.bwnsite-service-copy p{color:#745f6c}
+.bwnsite-service-link{background:#9e4f71}
+.bwnsite-service-link:hover{background:#873e60}
+.bwnsite-order-promo{background:#fff0f4;border-color:#f0d4e0;color:#694051}
+.bwnsite-order-promo a{color:#974969}
+.bwnsite-info-link{color:#a34f72}
+/* Motion that has purpose; no movement on every scroll or on reduced-motion devices. */
+a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-visible{outline:3px solid #e3a5bc;outline-offset:3px}
+@media(max-width:950px){
+ .hero{gap:20px;min-height:auto}
+ .hero-art{min-height:320px}
+ .hero-art .hero-brand-logo{width:min(100%,410px);height:auto}
+}
+@media(max-width:680px){
+ header .nav{height:70px}
+ .brand b{font-size:15px}
+ .brand small{letter-spacing:.7px;font-size:7px}
+ .hero{gap:22px;padding-top:43px;padding-bottom:55px}
+ h1{font-size:clamp(45px,11vw,60px);line-height:1.12}
+ .hero p{font-size:15px}
+ .hero-art{min-height:0;padding:14px 0 3px}
+ .hero-art .hero-brand-logo{width:min(100%,400px);height:auto;border-radius:24px}
+ .section-heading h2,.custom-copy h2,.center h2{font-size:clamp(36px,9vw,53px)}
+ .product-info h3{font-size:16px}
+ .btn,.add,.filters .chip{min-height:44px}
+}
+@media(max-width:380px){.hero-actions .btn{flex:1 1 100%}}
+@media(prefers-reduced-motion:reduce){
+ *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
