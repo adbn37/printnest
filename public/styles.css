@@ -181,3 +181,17 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 @media(prefers-reduced-motion:reduce){
  *,*::before,*::after{scroll-behavior:auto!important;animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
+
+/* PRINTNEST V13.1: optional starting prices and expandable product descriptions */
+/* Uniform cards, with readable descriptions on demand. */
+.product{display:flex;flex-direction:column}
+.product-info{display:flex;flex-direction:column;flex:1}
+.product-info p.product-description{height:auto;min-height:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;line-clamp:3;overflow:hidden;overflow-wrap:anywhere;white-space:pre-line}
+.product-info p.product-description.is-expanded{display:block;-webkit-line-clamp:unset;line-clamp:unset;overflow:visible;white-space:pre-wrap}
+.description-more{display:inline-flex;align-self:flex-start;align-items:center;border:0;background:transparent;padding:7px 0 2px;color:#a34f72;font-size:12px;font-weight:800;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.description-more[hidden]{display:none!important}
+.description-more:focus-visible{outline:2px solid #ad5c7c;outline-offset:3px}
+.product-bottom{margin-top:auto;padding-top:18px;gap:9px}
+.product-bottom .price{font-size:clamp(15px,1.35vw,19px);line-height:1.25;min-width:0}
+.price-from{display:block;font-size:11px;line-height:1.5;font-weight:800;color:#9d516e;letter-spacing:.025em}
+@media(max-width:720px){.product-bottom{gap:10px}.product-bottom .price{font-size:17px}}

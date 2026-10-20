@@ -32,10 +32,13 @@ export function makeOrderItems(catalog,selected){
    print={print_weight_g:grams,print_minutes:minutes,print_cost_cents:cents};
    detail='bundle';
   }else{materials=[];print=snapshot(p);detail='single'}
-  price=p.price===null?null:Math.round(Number(p.price)*100);
-  if(price!==null&&(!Number.isSafeInteger(price)||price<0))throw Error('Invalid product price');
+  const minimumPrice=p.price===null?null:Math.round(Number(p.price)*100);
+  if(minimumPrice!==null&&(!Number.isSafeInteger(minimumPrice)||minimumPrice<0))throw Error('Invalid product price');
+  // 'Start From' is not a final invoice amount: require a quotation before payment.
+  const startingFrom=p.starting_from===true&&minimumPrice!==null;
+  price=startingFrom?null:minimumPrice;
   if(price===null)unpriced=true;else total+=price*quantity;
-  lines.push({id,title:p.title,quantity,price_cents:price,...print,materials,product_type:detail,recipe_version:2,customization:customerCustomization(request.customization)});
+  lines.push({id,title:p.title,quantity,price_cents:price,starting_from:startingFrom,minimum_price_cents:startingFrom?minimumPrice:null,...print,materials,product_type:detail,recipe_version:2,customization:customerCustomization(request.customization)});
  }
  if(total>100000000)throw Error('Order exceeds price limit');
  return {items:lines,total_cents:unpriced?null:total};

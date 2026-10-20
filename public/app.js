@@ -13,6 +13,8 @@ const $=id=>document.getElementById(id);let products=seed.slice();let filter='Al
 try{bag=JSON.parse(localStorage.getItem('printnest_cart_v1')||'[]');if(!Array.isArray(bag))bag=[];bag=bag.filter(x=>x&&typeof x.id==='string'&&Number.isSafeInteger(Number(x.qty))&&Number(x.qty)>0&&Number(x.qty)<=100).slice(0,40).map(x=>({...x,key:typeof x.key==='string'&&x.key?x.key:crypto.randomUUID()}))}catch{bag=[]};
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const price=p=>p==null?'Ask for price':'BND '+Number(p).toFixed(2);
+const priceLabel=p=>p.price==null?'On request':(p.starting_from===true?'Start From ':'')+price(p.price);
+const priceCard=p=>p.price==null?'On request':p.starting_from===true?'<span class="price-from">Start From</span>'+price(p.price):price(p.price);
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').style.display='none',3000)}
 // V12: customer-facing catalog, product personalisation and per-line cart
 let shopSearch='',shopSort='featured',customizeProduct=null,customizeKey=null,customizeReturnToBag=false;
@@ -28,10 +30,13 @@ function render(){
  if(!list.length){const empty=document.createElement('div');empty.className='shop-empty';empty.textContent='No matching designs. Try another search or category.';holder.append(empty);return}
  for(const p of list){
   const card=document.createElement('article');card.className='product';
-  card.innerHTML=`<div class="product-image"><img src="${esc(p.image)}" loading="lazy" alt="${esc(p.title)}"><span class="product-category">${esc(p.category)}</span></div><div class="product-info"><h3>${esc(p.title)}</h3><p>${esc(p.description||'Customized 3D printed creation.')}</p><div class="product-bottom"><span class="price">${p.price==null?'On request':price(p.price)}</span><button class="add" type="button" aria-label="Personalise ${esc(p.title)}">Personalise ↗</button></div></div>`;
+  card.innerHTML=`<div class="product-image"><img src="${esc(p.image)}" loading="lazy" alt="${esc(p.title)}"><span class="product-category">${esc(p.category)}</span></div><div class="product-info"><h3>${esc(p.title)}</h3><p class="product-description">${esc(p.description||'Customized 3D printed creation.')}</p><button class="description-more" type="button" aria-expanded="false" hidden>Read more ↓</button><div class="product-bottom"><span class="price">${priceCard(p)}</span><button class="add" type="button" aria-label="Personalise ${esc(p.title)}">Personalise ↗</button></div></div>`;
   card.querySelector('.product-image img').onerror=()=>{const missing=document.createElement('div');missing.className='shop-image-unavailable';missing.textContent='Image temporarily unavailable';card.querySelector('.product-image img')?.replaceWith(missing)};
   card.querySelector('.add').onclick=()=>openCustomizer(p.id);
   holder.append(card);
+  const desc=card.querySelector('.product-description'),more=card.querySelector('.description-more');
+  more.hidden=desc.scrollHeight<=desc.clientHeight+1&&(p.description||'').length<=88;
+  more.onclick=()=>{const expanded=desc.classList.toggle('is-expanded');more.textContent=expanded?'Show less ↑':'Read more ↓';more.setAttribute('aria-expanded',String(expanded))};
  }
 }
 function save(){localStorage.setItem('printnest_cart_v1',JSON.stringify(bag));renderBag()}
@@ -42,7 +47,7 @@ function openCustomizer(id,key=null,returnToBag=false){
  const old=key?bag.find(x=>x.key===key):null,c=customDetails(old?.customization),f=$('customizeForm');
  f.reset();f.elements.wording.value=c.wording||'';f.elements.color.value=c.color||'';f.elements.packaging.value=c.packaging||'None';f.elements.instructions.value=c.instructions||'';f.elements.qty.value=old?.qty||1;
  $('customizeTitle').textContent=product.title;$('customizeImage').src=product.image;$('customizeImage').alt=product.title;
- $('customizePrice').textContent=product.price==null?'Price on request':price(product.price)+' / item';
+ $('customizePrice').textContent=product.price==null?'Price on request':priceLabel(product)+' / item'+(product.starting_from===true?' — final quote to confirm':'');
  $('customizeAction').textContent=key?'Update bag':'Add to bag';
  $('configurator').hidden=false;document.body.style.overflow='hidden';f.elements.wording.focus();
 }
@@ -65,15 +70,15 @@ window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('configurator').hi
 function change(key,delta){const row=bag.find(x=>x.key===key);if(!row)return;row.qty=Math.min(100,row.qty+delta);if(row.qty<=0)bag=bag.filter(x=>x.key!==key);save()}
 function renderBag(){
  let n=bag.reduce((a,b)=>a+Number(b.qty||0),0);$('cartCount').textContent=n;$('cartCount2').textContent=n;
- const target=$('cartItems');target.replaceChildren();let total=0,unpriced=false;
+ const target=$('cartItems');target.replaceChildren();let total=0,unpriced=false,hasFrom=false;
  for(const line of bag){
   const p=products.find(x=>x.id===line.id);if(!p)continue;
-  if(p.price===null)unpriced=true;else total+=p.price*line.qty;
+  if(p.price===null)unpriced=true;else {total+=p.price*line.qty;if(p.starting_from===true)hasFrom=true}
   const el=document.createElement('div');el.className='cart-line';
   const img=document.createElement('img');img.src=p.image;img.alt=p.title;
   const detail=document.createElement('div');detail.className='detail';
   const title=document.createElement('strong');title.textContent=p.title;
-  const amount=document.createElement('small');amount.textContent=price(p.price)+' / item';
+  const amount=document.createElement('small');amount.textContent=priceLabel(p)+' / item'+(p.starting_from===true?' (quote to confirm)':'');
   const custom=document.createElement('p');custom.className='bag-customization';custom.textContent=preferenceSummary(customDetails(line.customization))||'No personalisation requested';
   const actions=document.createElement('div');actions.className='bag-actions';
   const edit=document.createElement('button');edit.type='button';edit.textContent='Edit details';edit.onclick=()=>{drawer(false);openCustomizer(line.id,line.key,true)};
@@ -84,7 +89,9 @@ function renderBag(){
   controls.append(less,number,more);actions.append(edit,controls);detail.append(title,amount,custom,actions);el.append(img,detail);target.append(el);
  }
  if(!target.children.length)target.innerHTML='<div class="empty">Your bag is empty.<br>Pick something cute from the shop ✳</div>';
- $('subtotal').textContent=`BND ${total.toFixed(2)}${unpriced?' + quote items':''}`;
+ $('subtotalTitle').textContent=hasFrom?'Minimum estimate':'Estimated subtotal';
+ $('subtotal').textContent=`BND ${total.toFixed(2)}${unpriced?' + quote items':hasFrom?' minimum':''}`;
+ $('checkoutPriceNote').textContent=hasFrom?'Start From is a minimum estimate only. Final price must be confirmed with PrintNest before payment. Requested packaging is not included.':'Product subtotal only. Requested packaging is not included and will be confirmed separately.';
 }
 function drawer(show){$('drawer').classList.toggle('open',show);$('drawer').setAttribute('aria-hidden',String(!show));$('overlay').hidden=!show;document.body.style.overflow=show?'hidden':''}
 $('cartButton').onclick=()=>drawer(true);$('closeCart').onclick=()=>drawer(false);$('overlay').onclick=()=>drawer(false);

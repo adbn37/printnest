@@ -180,3 +180,8 @@
 .pn-orders-empty{grid-column:1/-1;border:1px dashed #ded5f0;background:#fff;border-radius:12px;padding:25px;color:#777085}
 #orders [hidden],#createManualOrderPanel[hidden]{display:none!important}
 @media(max-width:580px){.pn-order-views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.pn-order-views button{padding:12px 8px}}
+
+/* PrintNest V13.1: optional per-product starting price control */
+.pn-start-from-option{display:flex!important;align-items:center;gap:10px;font-size:13px;font-weight:700;margin:12px 0 17px;color:#684e5c}
+.pn-start-from-option input[type=checkbox]{width:18px;height:18px;flex:0 0 18px;accent-color:#b85d82;margin:0}
+.pn-start-from-option small{font-size:11px;font-weight:400;color:#867782}

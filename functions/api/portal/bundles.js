@@ -17,7 +17,7 @@ export async function onRequestPost({request,env}){
   // Optional boxes, plastic and accessories belong to each customer order.
   const extras=[];
   if(catalog.length>=200)return invalid('Catalog limit reached');
-  const id='up-'+crypto.randomUUID();const entry={id,title,description,price:Number(price),category:'Gifts',image:first.image,visible:true,product_type:'bundle',components:clean,materials:extras,print_weight_g:null,print_minutes:null,print_cost_cents:null};
+  const id='up-'+crypto.randomUUID();const entry={id,title,description,price:Number(price),starting_from:(d?.starting_from==='true'||d?.starting_from===true)&&Number(price)>0,category:'Gifts',image:first.image,visible:true,product_type:'bundle',components:clean,materials:extras,print_weight_g:null,print_minutes:null,print_cost_cents:null};
   await putCatalog(env,[...catalog,entry]);
   await env.PRINTNEST_DB.prepare('INSERT INTO portal_audit(actor_email,action,entity_id,detail) VALUES(?,?,?,?)').bind(g.user.email,'products.bundle.add',id,JSON.stringify({components:clean,extras})).run();
   return json({ok:true,id},201);

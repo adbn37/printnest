@@ -21,7 +21,10 @@ function productInput(data,{allowQuote=false}={}){
  if(raw&&!/^\d{1,6}(?:\.\d{1,2})?$/.test(raw))return {error:'Price must be BND with up to 2 decimals'};
  const price=raw===''?null:Number(raw);
  if(price!==null&&price>100000)return {error:'Product price exceeds limit'};
- return {title,description,category,price,...print};
+ // The label is optional for every product; it never changes the numeric minimum.
+ const starting_from=String(data.get('starting_from')??'')==='true';
+ if(starting_from&&(price===null||price<=0))return {error:'Start From needs a price greater than BND 0'};
+ return {title,description,category,price,starting_from,...print};
 }
 export async function onRequestGet({request,env}){
  const g=await guard(request,env);if(g.response)return g.response;
