@@ -195,3 +195,24 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .product-bottom .price{font-size:clamp(15px,1.35vw,19px);line-height:1.25;min-width:0}
 .price-from{display:block;font-size:11px;line-height:1.5;font-weight:800;color:#9d516e;letter-spacing:.025em}
 @media(max-width:720px){.product-bottom{gap:10px}.product-bottom .price{font-size:17px}}
+
+
+/* PRINTNEST_V13_2_CHECKOUT: receipt-required fixed checkout, quote-only starting prices */
+.checkout-bank-panel{margin:18px 0 12px;padding:15px;border:1px solid #efd6dc;border-radius:16px;background:#fffdfd;color:#392732}
+.checkout-bank-panel[hidden],.checkout-quote-notice[hidden],#checkoutProofWrap[hidden],.checkout-wa-retry[hidden]{display:none!important}
+.checkout-bank-heading{display:flex;align-items:center;gap:10px;padding-bottom:13px;border-bottom:1px solid #f2e4e7}
+.checkout-bank-icon{display:grid;place-items:center;background:#f9e9ee;color:#9c466b;width:38px;height:38px;border-radius:11px;font-size:21px}
+.checkout-bank-heading strong{display:block;font-size:14px}.checkout-bank-heading small{display:block;font-size:11px;line-height:1.5;color:#9a7584}
+.checkout-bank-panel h4{margin:16px 0 10px;font-size:13px;font-weight:800;letter-spacing:0}
+.checkout-bank-row{display:flex;align-items:center;justify-content:space-between;gap:8px;background:#fcf5f7;border:1px solid #f5eaf0;padding:12px 13px;border-radius:11px;margin-top:9px}
+.checkout-bank-row span{display:block;font-size:10px;color:#a4778b;text-transform:uppercase;letter-spacing:.7px}
+.checkout-bank-row strong{display:block;font-size:15px;letter-spacing:.25px;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.checkout-bank-row button.checkout-copy{flex:none;border:1px solid #edd0db;color:#953f65;background:white;border-radius:9px;padding:8px 12px;font-size:12px;font-weight:800;min-height:36px}
+.checkout-bank-row button.checkout-copy:hover,.checkout-bank-row button.checkout-copy:focus-visible{background:#fbe5ed}
+.checkout-bank-instruction{font-size:12px;line-height:1.65;color:#775967;margin:14px 0 0}
+.checkout-copy-status{font-size:11px;font-weight:750;color:#9c466b;min-height:0;margin:7px 0 0}
+.checkout-quote-notice{margin:17px 0;padding:16px;border:1px solid #f0cfdd;background:#fff1f6;border-radius:14px;color:#773450}
+.checkout-quote-notice strong{display:block;font-size:13px}.checkout-quote-notice p{margin:7px 0 0;font-size:12px;line-height:1.65}
+.checkout-required{color:#b84562;font-size:11px}.checkout-wa-retry{display:block;text-align:center;padding:11px 8px;margin-top:6px;color:#9c466b;font-size:13px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+#checkoutProofWrap{display:block}#checkoutProof:required{border-color:#efc5d3}
+@media(max-width:440px){.checkout-bank-panel{padding:12px}.checkout-bank-row{padding:10px}.checkout-bank-row strong{font-size:13px}}

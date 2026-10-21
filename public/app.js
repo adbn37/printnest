@@ -68,6 +68,23 @@ $('customizeForm').onsubmit=e=>{
 };
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('configurator').hidden)closeCustomizer()});
 function change(key,delta){const row=bag.find(x=>x.key===key);if(!row)return;row.qty=Math.min(100,row.qty+delta);if(row.qty<=0)bag=bag.filter(x=>x.key!==key);save()}
+// If even one line has a variable or unpriced amount, the whole basket is a quote.
+function checkoutNeedsQuote(){
+ return bag.some(line=>{
+  const product=products.find(item=>item.id===line.id);
+  return product&&(product.starting_from===true||product.price==null);
+ });
+}
+function refreshCheckoutMode(){
+ const hasItems=bag.length>0,quote=checkoutNeedsQuote();
+ $('checkoutQuoteNotice').hidden=!hasItems||!quote;
+ $('checkoutBankDetails').hidden=!hasItems||quote;
+ $('checkoutProofWrap').hidden=!hasItems||quote;
+ $('checkoutProof').required=hasItems&&!quote;
+ if(quote)$('checkoutProof').value='';
+ $('checkout').textContent=quote?'Send Quote via WhatsApp ↗':'Submit paid order & notify via WhatsApp ↗';
+ $('checkoutPriceNote').textContent=!hasItems?'Select products to continue.':quote?'Minimum prices are estimates only. PrintNest will confirm your final quote before payment.': 'Fixed product subtotal. Transfer this amount to either account below and upload proof of payment. Requested packaging is not included.';
+}
 function renderBag(){
  let n=bag.reduce((a,b)=>a+Number(b.qty||0),0);$('cartCount').textContent=n;$('cartCount2').textContent=n;
  const target=$('cartItems');target.replaceChildren();let total=0,unpriced=false,hasFrom=false;
@@ -91,25 +108,54 @@ function renderBag(){
  if(!target.children.length)target.innerHTML='<div class="empty">Your bag is empty.<br>Pick something cute from the shop ✳</div>';
  $('subtotalTitle').textContent=hasFrom?'Minimum estimate':'Estimated subtotal';
  $('subtotal').textContent=`BND ${total.toFixed(2)}${unpriced?' + quote items':hasFrom?' minimum':''}`;
- $('checkoutPriceNote').textContent=hasFrom?'Start From is a minimum estimate only. Final price must be confirmed with PrintNest before payment. Requested packaging is not included.':'Product subtotal only. Requested packaging is not included and will be confirmed separately.';
+ refreshCheckoutMode();
 }
 function drawer(show){$('drawer').classList.toggle('open',show);$('drawer').setAttribute('aria-hidden',String(!show));$('overlay').hidden=!show;document.body.style.overflow=show?'hidden':''}
 $('cartButton').onclick=()=>drawer(true);$('closeCart').onclick=()=>drawer(false);$('overlay').onclick=()=>drawer(false);
+// Clipboard API works on the HTTPS storefront; support browsers with legacy copy only.
+for(const button of document.querySelectorAll('[data-copy-account]')){
+ button.addEventListener('click',async()=>{
+  const number=button.dataset.copyAccount;
+  let copied=false;
+  try{
+   if(navigator.clipboard&&window.isSecureContext){await navigator.clipboard.writeText(number);copied=true}
+   else{
+    const temporary=document.createElement('textarea');temporary.value=number;temporary.style.position='fixed';temporary.style.left='-10000px';document.body.append(temporary);temporary.select();copied=document.execCommand('copy');temporary.remove();
+   }
+  }catch{}
+  $('checkoutCopyStatus').textContent=copied?'Account number copied: '+number:'Copy unavailable. Select the number and copy it manually.';
+ });
+}
 function whatsapp(message){const url='https://wa.me/'+PHONE+'?text='+encodeURIComponent(message);window.open(url,'_blank','noopener,noreferrer')}
 $('checkout').onclick=async()=>{
  $('bwnsiteAfterOrder').hidden=true;
+ $('checkoutWhatsAppRetry').hidden=true;
  if(!bag.length)return toast('Add a product first');
- const name=$('checkoutName').value.trim(),phone=$('checkoutPhone').value.trim(),notes=$('checkoutNotes').value.trim(),proof=$('checkoutProof').files[0];
+ const isQuote=checkoutNeedsQuote();
+ const name=$('checkoutName').value.trim(),phone=$('checkoutPhone').value.trim(),notes=$('checkoutNotes').value.trim();
+ const proof=isQuote?null:$('checkoutProof').files[0];
  if(name.length<2||!/^[+\d\s()-]{7,25}$/.test(phone))return toast('Enter your name and WhatsApp phone number');
- if(proof&&proof.size>5*1024*1024)return toast('Payment proof must be under 5MB');
- const button=$('checkout');button.disabled=true;$('checkoutResult').textContent='Saving your order…';
+ if(!isQuote&&!proof)return toast('Upload your payment receipt to submit a fixed-price order');
+ if(proof&&proof.size>5*1024*1024)return toast('Payment proof must be 5 MB or smaller');
+ const button=$('checkout');button.disabled=true;$('checkoutResult').textContent=isQuote?'Saving your quote request…':'Saving your paid order…';
  const form=new FormData();form.set('name',name);form.set('phone',phone);form.set('notes',notes);form.set('items',JSON.stringify(bag));if(proof)form.set('proof',proof);
- try{const response=await fetch('/api/orders',{method:'POST',body:form});const result=await response.json();if(!response.ok)throw Error(result.error||'Order could not be saved');
- const lines=bag.map(b=>{let p=products.find(x=>x.id===b.id);return p?`• ${p.title} × ${b.qty}${preferenceSummary(customDetails(b.customization))?'\n  '+preferenceSummary(customDetails(b.customization)):''}`:''}).filter(Boolean).join('\n');
- $('checkoutResult').textContent=`Order ${result.id} saved. Please press Send in WhatsApp to notify us.`;
- $('bwnsiteAfterOrder').hidden=false;
- whatsapp(`Hello 3D PRINTNEST! New website order\nOrder ID: ${result.id}\nName: ${name}\nPhone: ${phone}\nItems:\n${lines}\nTotal: ${result.total===null?'Quotation required':'BND '+Number(result.total).toFixed(2)}\nPayment proof: ${proof?'Uploaded — please verify':'Not uploaded'}\nNotes: ${notes||'None'}\n\nPlease confirm this order. `);
- bag=[];save();
+ try{
+  const response=await fetch('/api/orders',{method:'POST',body:form});
+  const result=await response.json();if(!response.ok)throw Error(result.error||'Could not save your request');
+  const savedQuote=result.is_quote===true;
+  const lines=bag.map(b=>{
+   const p=products.find(x=>x.id===b.id);
+   return p?`• ${p.title} × ${b.qty}${p.starting_from===true&&p.price!=null?' (Start From '+price(p.price)+')':''}${preferenceSummary(customDetails(b.customization))?'\n  '+preferenceSummary(customDetails(b.customization)):''}`:'';
+  }).filter(Boolean).join('\n');
+  const totalMessage=savedQuote?'Final price: quotation required':'Total: BND '+Number(result.total).toFixed(2);
+  const message=`Hello 3D PRINTNEST! ${savedQuote?'Quotation request':'New website order'}\nOrder ID: ${result.id}\nName: ${name}\nPhone: ${phone}\nItems:\n${lines}\n${totalMessage}\n${savedQuote?'Payment: Not required until quote confirmed':'Payment proof: Uploaded — please verify'}\nNotes: ${notes||'None'}\n\n${savedQuote?'Please send me a final quotation before payment.':'Please verify my receipt and confirm this order.'}`;
+  $('checkoutResult').textContent=`${savedQuote?'Quote request':'Order'} ${result.id} saved. Please press Send in WhatsApp to notify PrintNest.`;
+  $('bwnsiteAfterOrder').hidden=false;
+  const url='https://wa.me/'+PHONE+'?text='+encodeURIComponent(message);
+  const retry=$('checkoutWhatsAppRetry');retry.href=url;retry.textContent=savedQuote?'Open WhatsApp to send quote request ↗':'Open WhatsApp to send paid order ↗';retry.hidden=false;
+  // Browsers may block automatic popups after a network request; the explicit link above always works.
+  window.open(url,'_blank','noopener,noreferrer');
+  bag=[];save();
  }catch(e){$('checkoutResult').textContent=e.message;toast(e.message)}finally{button.disabled=false}
 };
 $('references').onchange=e=>{let files=[...e.target.files];if(files.length>4){e.target.value='';return toast('Maximum 4 pictures')}const root=$('previews');root.innerHTML='';for(const f of files){if(!f.type.startsWith('image/'))continue;let img=new Image();const url=URL.createObjectURL(f);img.src=url;img.onload=()=>URL.revokeObjectURL(url);root.append(img)}};
