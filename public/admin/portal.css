@@ -185,3 +185,11 @@
 .pn-start-from-option{display:flex!important;align-items:center;gap:10px;font-size:13px;font-weight:700;margin:12px 0 17px;color:#684e5c}
 .pn-start-from-option input[type=checkbox]{width:18px;height:18px;flex:0 0 18px;accent-color:#b85d82;margin:0}
 .pn-start-from-option small{font-size:11px;font-weight:400;color:#867782}
+
+
+/* PrintNest V13.3: product-specific price per letter editor. */
+.pn-letter-pricing-field{display:grid;grid-column:1 / -1;grid-template-columns:minmax(0,1fr);gap:7px;border:1px solid #ead6df;background:#fff8fa;border-radius:13px;padding:12px;margin:10px 0}
+.pn-letter-pricing-field label{display:flex;align-items:center;gap:8px;margin:0;font-size:12px;flex-wrap:wrap}
+.pn-letter-pricing-field label input[type=checkbox]{width:auto;min-width:16px;accent-color:#b24d77}
+.pn-letter-pricing-field label input[type=number]{width:130px;max-width:100%;margin-left:4px}
+.pn-letter-pricing-field small{font-size:11px;color:#927283;line-height:1.5}

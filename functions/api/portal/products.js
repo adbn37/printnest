@@ -21,10 +21,18 @@ function productInput(data,{allowQuote=false}={}){
  if(raw&&!/^\d{1,6}(?:\.\d{1,2})?$/.test(raw))return {error:'Price must be BND with up to 2 decimals'};
  const price=raw===''?null:Number(raw);
  if(price!==null&&price>100000)return {error:'Product price exceeds limit'};
- // The label is optional for every product; it never changes the numeric minimum.
- const starting_from=String(data.get('starting_from')??'')==='true';
- if(starting_from&&(price===null||price<=0))return {error:'Start From needs a price greater than BND 0'};
- return {title,description,category,price,starting_from,...print};
+ // Optional automatic price = base product price + (chargeable letters * price per letter).
+ // Both price components are server-owned catalog data; the customer's browser cannot set them.
+ const perLetter=String(data.get('per_letter')??'')==='true';
+ const letterRaw=String(data.get('letter_price')??'').trim();
+ if(perLetter&&(price===null||price<0))return {error:'Automatic letter pricing requires a base price'};
+ if(perLetter&&!/^\d{1,4}(?:\.\d{1,2})?$/.test(letterRaw))return {error:'Enter a valid price per letter (BND)'};
+ const per_letter_price_cents=perLetter?Math.round(Number(letterRaw)*100):null;
+ if(perLetter&&(!Number.isSafeInteger(per_letter_price_cents)||per_letter_price_cents<1||per_letter_price_cents>100000))return {error:'Letter price must be between BND 0.01 and BND 1,000'};
+ const pricing_mode=perLetter?'per_letter':'standard';
+ const starting_from=perLetter||String(data.get('starting_from')??'')==='true';
+ if(starting_from&&(price===null||price<=0))return {error:'Start From needs a base price greater than BND 0'};
+ return {title,description,category,price,starting_from,pricing_mode,per_letter_price_cents,...print};
 }
 export async function onRequestGet({request,env}){
  const g=await guard(request,env);if(g.response)return g.response;
@@ -52,6 +60,7 @@ export async function onRequestPatch({request,env}){
  try{
   const list=await getCatalog(env),merged=mergeCatalog(list),current=merged.find(p=>p.id===id);
   if(!current)return invalid('Product not found',404);
+  if(current.product_type==='bundle'&&input.pricing_mode==='per_letter')return invalid('Automatic letter pricing is only available for individual products');
   const file=data.get('image');if(file?.size){const check=await validatePhoto(file);if(check.error)return invalid(check.error);newKey='images/'+crypto.randomUUID()+'.'+check.ext;await env.PRINTNEST_BUCKET.put(newKey,file.stream(),{httpMetadata:{contentType:file.type}})}
   const materials=[]; // Clear old product recipes; individual orders own all material choices.
   const updated={...current,...input,materials,archived:current.archived===true,visible:current.archived===true?false:String(data.get('visible'))==='true',image:newKey?'/'+newKey:current.image};

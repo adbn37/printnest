@@ -22,6 +22,10 @@ export async function onRequestPost({request,env}){
  // Authoritative quote/fixed classification comes from server-owned catalog prices.
  // Never trust a price or "quote" flag submitted by the browser.
  const isQuote=orderTotal===null;
+ if(!isQuote&&form.has('expected_total_cents')){
+  const expected=String(form.get('expected_total_cents')??'');
+  if(!/^\d{1,9}$/.test(expected)||Number(expected)!==orderTotal)return bad('Product pricing changed. Refresh the shop and check the total before transferring payment.',409);
+ }
  if(isQuote&&proof?.size)return bad('Quotation requests do not need payment proof. Remove the file and request a quote.');
  if(!isQuote&&(!proof||!proof.size))return bad('Payment proof is required for fixed-price orders. Transfer the total and upload your receipt.');
  if(proof&&proof.size){if(!env.PRINTNEST_RECEIPTS)return bad('Receipt storage not configured. Please contact PrintNest or send proof through WhatsApp.',503);if(proof.size>5*1024*1024)return bad('Proof must be 5 MB or smaller',413);if(!receiptTypes[proof.type]||!validReceipt(await proof.slice(0,16).arrayBuffer(),proof.type))return bad('Receipt must be PNG, JPG, WebP or PDF')}

@@ -34,11 +34,23 @@ export function makeOrderItems(catalog,selected){
   }else{materials=[];print=snapshot(p);detail='single'}
   const minimumPrice=p.price===null?null:Math.round(Number(p.price)*100);
   if(minimumPrice!==null&&(!Number.isSafeInteger(minimumPrice)||minimumPrice<0))throw Error('Invalid product price');
-  // 'Start From' is not a final invoice amount: require a quotation before payment.
   const startingFrom=p.starting_from===true&&minimumPrice!==null;
-  price=startingFrom?null:minimumPrice;
+  const autoLetters=p.pricing_mode==='per_letter';
+  const customization=customerCustomization(request.customization);
+  let letters=null,letterRate=null;
+  if(autoLetters){
+   if(minimumPrice===null||p.product_type==='bundle')throw Error('Automatic letter pricing configuration is invalid');
+   letterRate=Number(p.per_letter_price_cents);
+   if(!Number.isSafeInteger(letterRate)||letterRate<1||letterRate>100000)throw Error('Invalid catalog letter price');
+   const wording=String(customization?.wording||'').normalize('NFC');
+   if(!wording||!/^[\p{L}\p{N} ]+$/u.test(wording))throw Error('Enter a name using letters, numbers or spaces for this item');
+   letters=Array.from(wording.replace(/ /g,'')).length;
+   if(letters<1||letters>80)throw Error('Enter 1–80 letters or numbers for this item');
+   price=minimumPrice+(letters*letterRate);
+  }else{price=startingFrom?null:minimumPrice}
+  if(price!==null&&(!Number.isSafeInteger(price)||price<0||price>100000000))throw Error('Calculated price is too high');
   if(price===null)unpriced=true;else total+=price*quantity;
-  lines.push({id,title:p.title,quantity,price_cents:price,starting_from:startingFrom,minimum_price_cents:startingFrom?minimumPrice:null,...print,materials,product_type:detail,recipe_version:2,customization:customerCustomization(request.customization)});
+  lines.push({id,title:p.title,quantity,price_cents:price,starting_from:startingFrom&&!autoLetters,minimum_price_cents:startingFrom?minimumPrice:null,pricing_mode:autoLetters?'per_letter':'standard',base_price_cents:autoLetters?minimumPrice:null,letter_count:letters,letter_price_cents:letterRate,...print,materials,product_type:detail,recipe_version:2,customization});
  }
  if(total>100000000)throw Error('Order exceeds price limit');
  return {items:lines,total_cents:unpriced?null:total};

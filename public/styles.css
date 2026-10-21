@@ -216,3 +216,15 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .checkout-required{color:#b84562;font-size:11px}.checkout-wa-retry{display:block;text-align:center;padding:11px 8px;margin-top:6px;color:#9c466b;font-size:13px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
 #checkoutProofWrap{display:block}#checkoutProof:required{border-color:#efc5d3}
 @media(max-width:440px){.checkout-bank-panel{padding:12px}.checkout-bank-row{padding:10px}.checkout-bank-row strong{font-size:13px}}
+
+
+/* PrintNest V13.3: optional live letter pricing. Public shop follows the existing blush theme. */
+.pn-letter-preview{margin:15px 0;padding:16px 17px;background:linear-gradient(145deg,#fff5f8,#fffdfd);border:1px solid #edd2dd;border-radius:15px;color:#4d2e3e}
+.pn-letter-preview[hidden]{display:none!important}
+.pn-letter-preview>strong{display:block;font-size:13px;color:#a54e73;margin-bottom:7px}
+.pn-letter-preview>p{font-size:11px;line-height:1.6;color:#946f81;margin:0 0 10px}
+.pn-letter-preview>div{display:flex;justify-content:space-between;align-items:center;gap:15px;padding:6px 0;font-size:12px}
+.pn-letter-preview>div b{font-variant-numeric:tabular-nums;white-space:nowrap}
+.pn-letter-preview>div.pn-letter-total{border-top:1px solid #ecd8e0;padding-top:12px;margin-top:8px;color:#863a61;font-weight:800}
+.pn-letter-preview .pn-letter-total strong{font-size:18px;font-variant-numeric:tabular-nums}
+.price-letter-note{display:block;font-size:10px;font-weight:650;color:#926776;line-height:1.35;margin-top:3px}

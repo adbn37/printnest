@@ -14,7 +14,24 @@ try{bag=JSON.parse(localStorage.getItem('printnest_cart_v1')||'[]');if(!Array.is
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const price=p=>p==null?'Ask for price':'BND '+Number(p).toFixed(2);
 const priceLabel=p=>p.price==null?'On request':(p.starting_from===true?'Start From ':'')+price(p.price);
-const priceCard=p=>p.price==null?'On request':p.starting_from===true?'<span class="price-from">Start From</span>'+price(p.price):price(p.price);
+const priceCard=p=>p.price==null?'On request':p.starting_from===true?'<span class="price-from">Start From</span>'+price(p.price)+(p.pricing_mode==='per_letter'?'<span class="price-letter-note">+ '+price(Number(p.per_letter_price_cents||0)/100)+' per letter</span>':''):price(p.price);
+const autoLetterPrice=p=>p?.pricing_mode==='per_letter'&&p.price!=null&&Number.isSafeInteger(p.per_letter_price_cents)&&p.per_letter_price_cents>0;
+function countLetters(raw){
+ const s=String(raw??'').trim().normalize('NFC');
+ if(!s||!/^[\p{L}\p{N} ]+$/u.test(s))return null;
+ const count=Array.from(s.replace(/ /g,'')).length;
+ return count>=1&&count<=80?count:null;
+}
+function unitCents(p,custom){
+ if(!p||p.price==null)return null;
+ const base=Math.round(Number(p.price)*100);
+ if(autoLetterPrice(p)){
+  const count=countLetters(custom?.wording);
+  return count===null?null:base+count*p.per_letter_price_cents;
+ }
+ return p.starting_from===true?null:base;
+}
+function cartTotalCents(){return bag.reduce((sum,line)=>{const p=products.find(x=>x.id===line.id);return sum+(unitCents(p,customDetails(line.customization))??0)*line.qty},0)}
 function toast(s){$('toast').textContent=s;$('toast').style.display='block';clearTimeout(window.toastTimer);window.toastTimer=setTimeout(()=>$('toast').style.display='none',3000)}
 // V12: customer-facing catalog, product personalisation and per-line cart
 let shopSearch='',shopSort='featured',customizeProduct=null,customizeKey=null,customizeReturnToBag=false;
@@ -47,7 +64,12 @@ function openCustomizer(id,key=null,returnToBag=false){
  const old=key?bag.find(x=>x.key===key):null,c=customDetails(old?.customization),f=$('customizeForm');
  f.reset();f.elements.wording.value=c.wording||'';f.elements.color.value=c.color||'';f.elements.packaging.value=c.packaging||'None';f.elements.instructions.value=c.instructions||'';f.elements.qty.value=old?.qty||1;
  $('customizeTitle').textContent=product.title;$('customizeImage').src=product.image;$('customizeImage').alt=product.title;
- $('customizePrice').textContent=product.price==null?'Price on request':priceLabel(product)+' / item'+(product.starting_from===true?' — final quote to confirm':'');
+ const auto=autoLetterPrice(product);
+ $('customizeWordingLabel').textContent=auto?'Name / wording (required · spaces free)':'Name / wording (optional)';
+ f.elements.wording.required=auto;
+ $('letterPricingPreview').hidden=!auto;
+ $('customizePrice').textContent=auto?'Base '+price(product.price)+' + '+price(product.per_letter_price_cents/100)+' / letter':product.price==null?'Price on request':priceLabel(product)+' / item'+(product.starting_from===true?' — final quote to confirm':'');
+ updateLetterPreview();
  $('customizeAction').textContent=key?'Update bag':'Add to bag';
  $('configurator').hidden=false;document.body.style.overflow='hidden';f.elements.wording.focus();
 }
@@ -57,10 +79,24 @@ function closeCustomizer(){
 }
 $('closeConfigurator').onclick=closeCustomizer;
 $('configurator').addEventListener('click',e=>{if(e.target===$('configurator'))closeCustomizer()});
+function updateLetterPreview(){
+ const p=customizeProduct;if(!p||!autoLetterPrice(p))return;
+ const f=$('customizeForm'),letters=countLetters(f.elements.wording.value),qty=Number(f.elements.qty.value)||1;
+ const extra=(letters??0)*p.per_letter_price_cents,base=Math.round(p.price*100);
+ $('letterPricingHint').textContent=letters===null?'Enter a name using letters, numbers and spaces to calculate the price.':'Counted '+letters+' letters/numbers (spaces are free).';
+ $('letterBasePrice').textContent=price(base/100);
+ $('letterBreakdownLabel').textContent='Extra letters ('+(letters??0)+' × '+price(p.per_letter_price_cents/100)+')';
+ $('letterExtraPrice').textContent=price(extra/100);
+ $('letterUnitPrice').textContent=letters===null?'—':price((base+extra)/100);
+ $('letterLineTotal').textContent=letters===null?'—':price((base+extra)*qty/100);
+}
+$('customizeForm').elements.wording.addEventListener('input',updateLetterPreview);
+$('customizeForm').elements.qty.addEventListener('input',updateLetterPreview);
 $('customizeForm').onsubmit=e=>{
  e.preventDefault();const product=customizeProduct;if(!product)return;
  const f=e.currentTarget,qty=Number(f.elements.qty.value);
  if(!Number.isSafeInteger(qty)||qty<1||qty>100)return toast('Choose 1 to 100 items');
+ if(autoLetterPrice(product)&&countLetters(f.elements.wording.value)===null)return toast('Enter a valid name (letters, numbers, spaces only)');
  const customization={wording:f.elements.wording.value.trim(),color:f.elements.color.value.trim(),packaging:f.elements.packaging.value,instructions:f.elements.instructions.value.trim()};
  if(customizeKey){const row=bag.find(x=>x.key===customizeKey);if(row){row.qty=qty;row.customization=customization}}
  else{if(bag.length>=40)return toast('Maximum 40 different order lines.');bag.push({key:crypto.randomUUID(),id:product.id,qty,customization})}
@@ -68,11 +104,12 @@ $('customizeForm').onsubmit=e=>{
 };
 window.addEventListener('keydown',e=>{if(e.key==='Escape'&&!$('configurator').hidden)closeCustomizer()});
 function change(key,delta){const row=bag.find(x=>x.key===key);if(!row)return;row.qty=Math.min(100,row.qty+delta);if(row.qty<=0)bag=bag.filter(x=>x.key!==key);save()}
-// If even one line has a variable or unpriced amount, the whole basket is a quote.
+// Auto-priced Start From products have a final calculable amount, so they are paid orders.
+// Other Start From / unpriced products remain quotations. One quote line makes the basket a quote.
 function checkoutNeedsQuote(){
  return bag.some(line=>{
-  const product=products.find(item=>item.id===line.id);
-  return product&&(product.starting_from===true||product.price==null);
+  const p=products.find(item=>item.id===line.id);
+  return !p||p.price==null||(p.starting_from===true&&!autoLetterPrice(p));
  });
 }
 function refreshCheckoutMode(){
@@ -83,19 +120,23 @@ function refreshCheckoutMode(){
  $('checkoutProof').required=hasItems&&!quote;
  if(quote)$('checkoutProof').value='';
  $('checkout').textContent=quote?'Send Quote via WhatsApp ↗':'Submit paid order & notify via WhatsApp ↗';
- $('checkoutPriceNote').textContent=!hasItems?'Select products to continue.':quote?'Minimum prices are estimates only. PrintNest will confirm your final quote before payment.': 'Fixed product subtotal. Transfer this amount to either account below and upload proof of payment. Requested packaging is not included.';
+ $('checkoutPriceNote').textContent=!hasItems?'Select products to continue.':quote?'Quotation includes products requiring manual pricing; do not pay until PrintNest confirms the total.': 'Final product total includes any letter-based charges. Transfer this amount and upload proof of payment. Any separately requested packaging must be confirmed before payment.';
 }
 function renderBag(){
  let n=bag.reduce((a,b)=>a+Number(b.qty||0),0);$('cartCount').textContent=n;$('cartCount2').textContent=n;
- const target=$('cartItems');target.replaceChildren();let total=0,unpriced=false,hasFrom=false;
+ const target=$('cartItems');target.replaceChildren();let total=0,unpriced=false,hasFrom=false,autoPriced=false;
  for(const line of bag){
   const p=products.find(x=>x.id===line.id);if(!p)continue;
-  if(p.price===null)unpriced=true;else {total+=p.price*line.qty;if(p.starting_from===true)hasFrom=true}
+  const unit=unitCents(p,customDetails(line.customization));
+  if(unit===null){unpriced=true;if(p.starting_from===true){hasFrom=true;if(p.price!=null)total+=Math.round(Number(p.price)*100)*line.qty}}
+  else{total+=unit*line.qty;if(autoLetterPrice(p))autoPriced=true}
   const el=document.createElement('div');el.className='cart-line';
   const img=document.createElement('img');img.src=p.image;img.alt=p.title;
   const detail=document.createElement('div');detail.className='detail';
   const title=document.createElement('strong');title.textContent=p.title;
-  const amount=document.createElement('small');amount.textContent=priceLabel(p)+' / item'+(p.starting_from===true?' (quote to confirm)':'');
+  const amount=document.createElement('small');
+  const letters=autoLetterPrice(p)?countLetters(customDetails(line.customization).wording):null;
+  amount.textContent=autoLetterPrice(p)?(unit===null?'Enter a valid name to calculate price':price(unit/100)+' / item ('+letters+' letters)'):priceLabel(p)+' / item'+(p.starting_from===true?' (quote to confirm)':'');
   const custom=document.createElement('p');custom.className='bag-customization';custom.textContent=preferenceSummary(customDetails(line.customization))||'No personalisation requested';
   const actions=document.createElement('div');actions.className='bag-actions';
   const edit=document.createElement('button');edit.type='button';edit.textContent='Edit details';edit.onclick=()=>{drawer(false);openCustomizer(line.id,line.key,true)};
@@ -106,8 +147,8 @@ function renderBag(){
   controls.append(less,number,more);actions.append(edit,controls);detail.append(title,amount,custom,actions);el.append(img,detail);target.append(el);
  }
  if(!target.children.length)target.innerHTML='<div class="empty">Your bag is empty.<br>Pick something cute from the shop ✳</div>';
- $('subtotalTitle').textContent=hasFrom?'Minimum estimate':'Estimated subtotal';
- $('subtotal').textContent=`BND ${total.toFixed(2)}${unpriced?' + quote items':hasFrom?' minimum':''}`;
+ $('subtotalTitle').textContent=checkoutNeedsQuote()?'Minimum estimate':'Order total';
+ $('subtotal').textContent=`BND ${(total/100).toFixed(2)}${checkoutNeedsQuote()?' + quote items':''}`;
  refreshCheckoutMode();
 }
 function drawer(show){$('drawer').classList.toggle('open',show);$('drawer').setAttribute('aria-hidden',String(!show));$('overlay').hidden=!show;document.body.style.overflow=show?'hidden':''}
@@ -132,20 +173,22 @@ $('checkout').onclick=async()=>{
  $('checkoutWhatsAppRetry').hidden=true;
  if(!bag.length)return toast('Add a product first');
  const isQuote=checkoutNeedsQuote();
+ if(bag.some(line=>{const p=products.find(x=>x.id===line.id);return autoLetterPrice(p)&&unitCents(p,customDetails(line.customization))===null}))return toast('Edit the item and enter a valid personalised name before checkout');
  const name=$('checkoutName').value.trim(),phone=$('checkoutPhone').value.trim(),notes=$('checkoutNotes').value.trim();
  const proof=isQuote?null:$('checkoutProof').files[0];
  if(name.length<2||!/^[+\d\s()-]{7,25}$/.test(phone))return toast('Enter your name and WhatsApp phone number');
  if(!isQuote&&!proof)return toast('Upload your payment receipt to submit a fixed-price order');
  if(proof&&proof.size>5*1024*1024)return toast('Payment proof must be 5 MB or smaller');
  const button=$('checkout');button.disabled=true;$('checkoutResult').textContent=isQuote?'Saving your quote request…':'Saving your paid order…';
- const form=new FormData();form.set('name',name);form.set('phone',phone);form.set('notes',notes);form.set('items',JSON.stringify(bag));if(proof)form.set('proof',proof);
+ const form=new FormData();form.set('name',name);form.set('phone',phone);form.set('notes',notes);form.set('items',JSON.stringify(bag));if(!isQuote)form.set('expected_total_cents',String(cartTotalCents()));if(proof)form.set('proof',proof);
  try{
   const response=await fetch('/api/orders',{method:'POST',body:form});
   const result=await response.json();if(!response.ok)throw Error(result.error||'Could not save your request');
   const savedQuote=result.is_quote===true;
   const lines=bag.map(b=>{
    const p=products.find(x=>x.id===b.id);
-   return p?`• ${p.title} × ${b.qty}${p.starting_from===true&&p.price!=null?' (Start From '+price(p.price)+')':''}${preferenceSummary(customDetails(b.customization))?'\n  '+preferenceSummary(customDetails(b.customization)):''}`:'';
+   const unit=unitCents(p,customDetails(b.customization));
+   return p?`• ${p.title} × ${b.qty}${autoLetterPrice(p)?' ('+countLetters(customDetails(b.customization).wording)+' letters, '+(unit===null?'price unavailable':price(unit/100))+'/item)':p.starting_from===true&&p.price!=null?' (Start From '+price(p.price)+')':''}${preferenceSummary(customDetails(b.customization))?'\n  '+preferenceSummary(customDetails(b.customization)):''}`:'';
   }).filter(Boolean).join('\n');
   const totalMessage=savedQuote?'Final price: quotation required':'Total: BND '+Number(result.total).toFixed(2);
   const message=`Hello 3D PRINTNEST! ${savedQuote?'Quotation request':'New website order'}\nOrder ID: ${result.id}\nName: ${name}\nPhone: ${phone}\nItems:\n${lines}\n${totalMessage}\n${savedQuote?'Payment: Not required until quote confirmed':'Payment proof: Uploaded — please verify'}\nNotes: ${notes||'None'}\n\n${savedQuote?'Please send me a final quotation before payment.':'Please verify my receipt and confirm this order.'}`;
