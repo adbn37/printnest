@@ -35,3 +35,50 @@
 .pn-order-more summary::-webkit-details-marker{display:none}
 .pn-order-more-actions{padding:9px;display:flex;flex-wrap:wrap;gap:9px}
 .pn-order-more-actions button{min-height:40px;font-size:12px}
+
+/* V14 Data Management: compact, aligned record selection */
+#data-management .pn-dm-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-rows: min-content;
+    align-content: start;
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: min(420px, 50vh);
+}
+
+#data-management .pn-dm-list label {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    min-width: 0;
+    margin: 0;
+    padding: 10px 12px;
+    line-height: 1.45;
+}
+
+#data-management .pn-dm-list input[type="checkbox"],
+#data-management #dmBackupAck {
+    width: 18px !important;
+    height: 18px !important;
+    min-width: 18px;
+    padding: 0 !important;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+#data-management .pn-dm-list label span {
+    min-width: 0;
+    text-align: left;
+    overflow-wrap: anywhere;
+}
+
+#data-management .pn-danger-box > label:has(> #dmBackupAck) {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 12px;
+}
+
