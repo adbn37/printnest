@@ -228,3 +228,20 @@ a:focus-visible,button:focus-visible,input:focus-visible,textarea:focus-visible,
 .pn-letter-preview>div.pn-letter-total{border-top:1px solid #ecd8e0;padding-top:12px;margin-top:8px;color:#863a61;font-weight:800}
 .pn-letter-preview .pn-letter-total strong{font-size:18px;font-variant-numeric:tabular-nums}
 .price-letter-note{display:block;font-size:10px;font-weight:650;color:#926776;line-height:1.35;margin-top:3px}
+
+/* PrintNest: Show full product images without cropping */
+.product-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff1f5;
+    overflow: hidden;
+}
+
+.product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain !important;
+    object-position: center;
+    display: block;
+}
