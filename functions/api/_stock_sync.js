@@ -36,6 +36,24 @@ export async function postStockPurchase(db,{kind,id,quantity,amount_cents,date,d
  return {ok:true,expense_id:expenseId,stock_kind:kind,stock_id:id};
 }
 export async function reverseStockPurchase(db,expenseId,actor){
+ const bulkTable=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='printnest_bulk_roll_purchase_lines'").first();
+ if(bulkTable){
+  const rows=await db.prepare('SELECT l.roll_id,l.quantity_mg,r.remaining_mg,r.initial_mg FROM printnest_bulk_roll_purchase_lines l LEFT JOIN printnest_filament_rolls r ON r.id=l.roll_id WHERE l.expense_id=?').bind(expenseId).all();
+  if(rows.results?.length){
+   if(rows.results.some(x=>x.remaining_mg==null||Number(x.remaining_mg)<Number(x.quantity_mg)))return {error:'Cannot void bulk filament purchase: one or more rolls have been used or deleted. Reconcile stock first.'};
+   const statements=[];
+   for(const x of rows.results){
+    if(Number(x.initial_mg)===Number(x.quantity_mg)){
+     // A purchased roll cannot have initial_mg=0; remove an entirely unused roll instead.
+     statements.push(db.prepare('DELETE FROM printnest_bulk_roll_purchase_lines WHERE expense_id=? AND roll_id=?').bind(expenseId,x.roll_id));
+     statements.push(db.prepare('DELETE FROM printnest_filament_rolls WHERE id=? AND remaining_mg=? AND initial_mg=?').bind(x.roll_id,x.quantity_mg,x.quantity_mg));
+    }else{
+     statements.push(db.prepare('UPDATE printnest_filament_rolls SET remaining_mg=CASE WHEN remaining_mg>=? THEN remaining_mg-? ELSE -1 END,initial_mg=CASE WHEN initial_mg>? THEN initial_mg-? ELSE -1 END WHERE id=?').bind(x.quantity_mg,x.quantity_mg,x.quantity_mg,x.quantity_mg,x.roll_id));
+    }
+   }
+   return {linked:true,bulk:true,statements};
+  }
+ }
  const link=await db.prepare('SELECT * FROM printnest_stock_purchases WHERE expense_id=?').bind(expenseId).first();
  if(!link)return {linked:false};
  const stock=link.stock_kind==='item'?

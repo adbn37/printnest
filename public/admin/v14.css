@@ -1,0 +1,37 @@
+/* PrintNest V14: mobile-first compact stock, approvals and guarded deletion UI */
+.pn-stock-card{padding:14px 16px!important;margin:10px 0!important;border-radius:16px!important;display:flex;flex-direction:column;gap:7px;box-shadow:none!important}
+.pn-stock-card .inventory-item-content{display:flex;flex-direction:column;gap:5px;min-width:0;flex:1}
+.pn-stock-card .inventory-item-content strong{font-size:14px;line-height:1.35}
+.pn-stock-card .inventory-item-content small{font-size:12px;line-height:1.4;color:#777}
+.pn-stock-top{display:flex;align-items:center;gap:11px}
+.pn-stock-swatch{width:30px;height:30px;border-radius:12px;border:2px solid #fff;outline:1px solid #dfd3dc;flex:none}
+.pn-stock-pill{font-size:10px;font-weight:800;border-radius:30px;padding:4px 8px;background:#def5e8;color:#24603f;flex:none}
+.pn-stock-pill.is-low{background:#fff1d2;color:#895516}.pn-stock-pill.is-out{background:#ffe1e5;color:#9a344e}
+.pn-stock-meter{height:6px;border-radius:15px;background:#f3ecf1;overflow:hidden}.pn-stock-meter span{display:block;height:100%;min-width:0;border-radius:inherit;background:#b25779}
+.pn-stock-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.pn-stock-footer small{font-size:11px;color:#8b7680}
+.pn-stock-manage{width:100%}.pn-stock-manage summary{cursor:pointer;color:#8e4067;background:#fff4f7;padding:9px 13px;border:1px solid #ebd5df;border-radius:10px;text-align:center;font-weight:700;font-size:12px;list-style:none}
+.pn-stock-manage summary::-webkit-details-marker{display:none}.pn-stock-manage[open] summary{border-radius:10px 10px 0 0}
+.pn-stock-manage .pn-manage-buttons{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:9px;border:1px solid #eedfe5;border-top:0;border-radius:0 0 10px 10px}
+.pn-stock-manage button{padding:10px 8px;min-height:38px;font-size:12px}
+.pn-order-approve{background:#b4547d!important;color:white!important;border:0!important;padding:13px!important;border-radius:10px!important;font-weight:800!important;min-height:44px}
+.pn-order-approve:disabled{opacity:.55;cursor:not-allowed}
+.pn-data-preview{background:#fff5f8;border:1px solid #ecd3dd;padding:14px;border-radius:12px;color:#83425e;font-size:12px;line-height:1.6}
+.pn-delete-action{background:#fff1f3!important;border:1px solid #edbdc8!important;color:#a02f4e!important;border-radius:9px;padding:9px 11px;font-weight:800}
+.pn-dm-list{display:grid;gap:7px;max-height:42vh;overflow:auto;border:1px solid #ecdce4;border-radius:12px;padding:12px}
+.pn-dm-list label{display:flex;align-items:center;gap:12px;padding:8px;background:#fff7f9;border-radius:9px;font-size:12px;min-width:0}
+.pn-dm-list input{accent-color:#b2567c;flex:none}
+.pn-danger-box{border:1px solid #eeb7c2;background:#fff4f6;border-radius:14px;padding:18px;display:grid;gap:12px}
+.pn-danger-box input,.pn-danger-box select{width:100%;padding:11px;border:1px solid #e4cbd4;border-radius:10px}
+.pn-delete-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:14px 0}
+.pn-roll-preview{display:block;color:#8b5570;font-weight:700;font-size:12px;margin-top:5px}
+.pn-data-actions{display:flex;flex-wrap:wrap;gap:8px}
+@media(max-width:520px){.pn-stock-manage .pn-manage-buttons{grid-template-columns:1fr}.pn-stock-card{padding:13px!important}.pn-data-actions button{width:100%}}
+
+/* Orders: everyday payment / approval stays visible; manufacturing setup is tucked away. */
+.pn-order-views{display:none!important}
+.pn-order-more{flex:1 1 100%;border:1px solid #eedfe7;border-radius:12px;background:#fffafc}
+.pn-order-more summary{cursor:pointer;text-align:center;font-size:12px;font-weight:800;color:#995273;padding:11px 13px;list-style:none}
+.pn-order-more summary::-webkit-details-marker{display:none}
+.pn-order-more-actions{padding:9px;display:flex;flex-wrap:wrap;gap:9px}
+.pn-order-more-actions button{min-height:40px;font-size:12px}

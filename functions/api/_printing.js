@@ -10,7 +10,7 @@ export const seedProducts=[
  {id:'coin-bank-color',title:'Coin Bank — Color Options',price:7,category:'Gifts',description:'Select your favorite colors and wording.',image:'/assets/product-1.webp'}
 ];
 export function isSeed(id){return seedProducts.some(p=>p.id===id)}
-export function mergeCatalog(extra=[]){const map=new Map(seedProducts.map(p=>[p.id,{...p,print_weight_g:null,print_minutes:null,print_cost_cents:null,visible:true}]));for(const p of extra){if(!p||typeof p.id!=='string')continue;map.set(p.id,{...(map.get(p.id)||{}),...p})}return [...map.values()]}
+export function mergeCatalog(extra=[]){const map=new Map(seedProducts.map(p=>[p.id,{...p,print_weight_g:null,print_minutes:null,print_cost_cents:null,visible:true}]));for(const p of extra){if(!p||typeof p.id!=='string')continue;map.set(p.id,{...(map.get(p.id)||{}),...p})}return [...map.values()].filter(p=>p.deleted!==true)}
 export function parsePrintFields(form){const fields=['print_weight_g','print_minutes','print_cost'];const values=fields.map(k=>String(form.get(k)??'').trim());if(values.every(x=>!x))return {print_weight_g:null,print_minutes:null,print_cost_cents:null};if(values.some(x=>!x))return {error:'Enter all three printing fields, or leave all three blank'};
  const [weight,time,cost]=values;
  if(!/^\d{1,6}(?:\.\d{1,3})?$/.test(weight)||!/^\d{1,6}$/.test(time)||!/^\d{1,6}(?:\.\d{1,2})?$/.test(cost))return {error:'Printing weight, minutes or BND cost format invalid'};

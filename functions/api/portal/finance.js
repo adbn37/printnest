@@ -91,7 +91,9 @@ export async function onRequestPatch({request,env}){
   const db=env.PRINTNEST_DB,old=await db.prepare('SELECT expense_kind FROM portal_expenses WHERE id=? AND voided_at IS NULL').bind(d.id).first();
   if(!old)return invalid('Expense not found',404);
   const link=await db.prepare('SELECT id FROM printnest_stock_purchases WHERE expense_id=?').bind(d.id).first();
-  if(link&&d.expense_kind!=='inventory')return invalid('This inventory purchase is linked to stock. Void it with stock reversal rather than reclassifying.',409);
+  const bulkTable=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='printnest_bulk_roll_purchase_lines'").first();
+  const bulk=bulkTable?await db.prepare('SELECT 1 AS x FROM printnest_bulk_roll_purchase_lines WHERE expense_id=? LIMIT 1').bind(d.id).first():null;
+  if((link||bulk)&&d.expense_kind!=='inventory')return invalid('This inventory purchase is linked to stock. Void it with stock reversal rather than reclassifying.',409);
   await db.batch([
    db.prepare('UPDATE portal_expenses SET expense_kind=? WHERE id=? AND voided_at IS NULL').bind(d.expense_kind,d.id),
    log(env,g.user.email,'finance.expense.reclassify',d.id,{before:old.expense_kind,after:d.expense_kind})
@@ -112,7 +114,7 @@ export async function onRequestDelete({request,env}){
   const reverse=kind==='expense'?await reverseStockPurchase(db,id,g.user.email):{linked:false};
   if(reverse.error)return invalid(reverse.error,409);
   await db.batch([
-   ...(reverse.linked?[reverse.statement]:[]),
+   ...(reverse.linked?(reverse.statements||[reverse.statement]):[]),
    db.prepare(`UPDATE ${table} SET voided_at=datetime('now'),voided_by=? WHERE id=? AND voided_at IS NULL`).bind(g.user.email,id),
    log(env,g.user.email,'finance.'+kind+'.void',id,{reversed_stock:reverse.linked})
   ]);

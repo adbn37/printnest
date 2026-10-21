@@ -27,19 +27,28 @@ export async function onRequestPost({request,env}){
   }
   if(action==='add_roll'){
    const label=clean(d.label,90),material=clean(d.material,40),color=clean(d.color,40),grams=dec(d.grams,100000,3),price=String(d.purchase_cost??'').trim()?dec(d.purchase_cost,100000):null;
-   if(!label||!material||!color||grams===null||grams<=0||price===null&&String(d.purchase_cost??'').trim())return invalid('Check roll name, material, colour, grams and optional purchase price');
-   const mg=Math.round(grams*1000);const cost=price===null?null:Math.round(price*100),id=crypto.randomUUID();
+   const quantity=Number(d.roll_quantity??1);
+   if(!label||!material||!color||grams===null||grams<=0||price===null&&String(d.purchase_cost??'').trim())return invalid('Check roll name, material, colour, grams and optional cost per roll');
+   if(!Number.isSafeInteger(quantity)||quantity<1||quantity>30)return invalid('Quantity must be 1–30 rolls');
+   const mg=Math.round(grams*1000),cost=price===null?null:Math.round(price*100);
    const purchase=d.record_purchase===true||String(d.record_purchase)==='true';
-   if(purchase&&(cost===null||cost<1))return invalid('Enter a positive roll purchase total when recording Finance purchase');
-   const steps=[db.prepare('INSERT INTO printnest_filament_rolls(id,label,material,color,initial_mg,remaining_mg,purchase_cost_cents,is_default,created_by) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,label,material,color,mg,mg,cost,0,g.user.email)];
-   let expenseId=null;
+   if(purchase&&(cost===null||cost<1))return invalid('Enter a positive per-roll purchase price to record in Finance');
+   if(purchase&&cost*quantity>100000000)return invalid('Bulk purchase total exceeds limit');
+   const actions=[],ids=[];let expenseId=null;
    if(purchase){
+    const exists=await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='printnest_bulk_roll_purchase_lines'").first();
+    if(!exists)return invalid('Run V14 additive bulk purchase D1 migration before saving linked roll purchases',503);
     expenseId=crypto.randomUUID();const date=new Intl.DateTimeFormat('en-CA',{year:'numeric',month:'2-digit',day:'2-digit',timeZone:'Asia/Brunei'}).format(new Date());
-    steps.push(db.prepare("INSERT INTO portal_expenses(id,occurred_on,category,description,amount_cents,expense_kind,created_by) VALUES(?,?,?,?,?,'inventory',?)").bind(expenseId,date,'Filament','Filament purchase: '+label,cost,g.user.email));
-    steps.push(db.prepare('INSERT INTO printnest_stock_purchases(id,expense_id,stock_kind,stock_id,quantity_units,quantity_mg,created_by,request_key) VALUES(?,?,?,?,?,?,?,?)').bind(crypto.randomUUID(),expenseId,'filament',id,0,mg,g.user.email,crypto.randomUUID()));
+    actions.push(db.prepare("INSERT INTO portal_expenses(id,occurred_on,category,description,amount_cents,expense_kind,created_by) VALUES(?,?,?,?,?,'inventory',?)").bind(expenseId,date,'Filament','Bulk filament purchase: '+label+' × '+quantity,cost*quantity,g.user.email));
    }
-   steps.push(audit(db,g.user.email,'production.roll.add',id,{label,material,color,grams,purchase_cost_cents:cost,linked_purchase:expenseId}));
-   await db.batch(steps);return json({ok:true,id,expense_id:expenseId},201);
+   for(let n=0;n<quantity;n++){
+    const id=crypto.randomUUID();ids.push(id);
+    const display=quantity>1?label+' · Roll '+(n+1)+'/'+quantity:label;
+    actions.push(db.prepare('INSERT INTO printnest_filament_rolls(id,label,material,color,initial_mg,remaining_mg,purchase_cost_cents,is_default,created_by) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,display,material,color,mg,mg,cost,0,g.user.email));
+    if(purchase)actions.push(db.prepare('INSERT INTO printnest_bulk_roll_purchase_lines(expense_id,roll_id,quantity_mg) VALUES(?,?,?)').bind(expenseId,id,mg));
+   }
+   actions.push(audit(db,g.user.email,'production.roll.bulk',ids[0],{ids,label,material,color,grams,quantity,cost_per_roll_cents:cost,expense_id:expenseId}));
+   await db.batch(actions);return json({ok:true,ids,quantity,expense_id:expenseId,total_grams:grams*quantity,total_cost_cents:cost===null?null:cost*quantity},201);
   }
   if(action==='adjust_roll'){
    const id=clean(d.id,80),raw=String(d.delta_grams??'').trim();

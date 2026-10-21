@@ -1,7 +1,7 @@
 const $=id=>document.getElementById(id);const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
 let jwt='',me=null,orders=[],products=[];const bnd=c=>'BND '+((Number(c)||0)/100).toFixed(2);
 function message(s){$('notice').textContent=s;$('loginMessage').textContent=s}async function api(path,options={}){const requestCredential=jwt;const r=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+requestCredential,...options.headers},cache:'no-store'});let data;try{data=await r.json()}catch{throw Error('Invalid response ('+r.status+')')}if(r.status===401){if(jwt===requestCredential)forceReauthentication();throw Error('Your Google session expired. Please sign in again.')}if(!r.ok)throw Error(data.error||'HTTP '+r.status);return data}
-function section(name){document.querySelectorAll('.section').forEach(x=>x.hidden=x.id!==name);document.querySelectorAll('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===name));$('sectionTitle').textContent=name[0].toUpperCase()+name.slice(1);document.querySelector('.sidebar').classList.remove('open');if(name==='orders'){showOrderView('current');loadOrders();loadOrderProducts()}if(name==='products')loadProducts();if(name==='overview')loadOrders();if(name==='inventory')loadInventory();if(name==='finance'){loadFinance();toggleFinancePurchase()}if(name==='production-board')window.PrintNestProductionBoard?.load();if(name==='reports')window.PrintNestReports?.load()}
+function section(name){document.querySelectorAll('.section').forEach(x=>x.hidden=x.id!==(name==='complete'?'orders':name));document.querySelectorAll('[data-section]').forEach(x=>x.classList.toggle('selected',x.dataset.section===name));$('sectionTitle').textContent=name[0].toUpperCase()+name.slice(1);document.querySelector('.sidebar').classList.remove('open');if(name==='orders'||name==='complete'){showOrderView(name==='complete'?'complete':'current');loadOrders();loadOrderProducts()}if(name==='products')loadProducts();if(name==='overview')loadOrders();if(name==='inventory')loadInventory();if(name==='finance'){loadFinance();toggleFinancePurchase()}if(name==='production-board')window.PrintNestProductionBoard?.load();if(name==='reports')window.PrintNestReports?.load()}
 const SESSION_KEY='printnest_google_credential';
 function clearSession(){sessionStorage.removeItem(SESSION_KEY);jwt='';me=null;orders=[]}
 function forceReauthentication(){
@@ -63,16 +63,32 @@ function showOrderView(view){
 }
 function renderOrders(){
  const completedView=orderView==='complete';
- $('ordersCurrentCount').textContent=orders.filter(o=>o.fulfillment_status!=='completed').length;
- $('ordersCompleteCount').textContent=orders.filter(o=>o.fulfillment_status==='completed').length;
- $('orderViewSummary').textContent=completedView?'Completed orders — still available for reference and status corrections.':'Current orders — completed orders are filed under Complete.';
- const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(completedView?o.fulfillment_status==='completed':o.fulfillment_status!=='completed')&&(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();if(!list.length){const empty=document.createElement('p');empty.className='pn-orders-empty';empty.textContent=completedView?'No completed orders found.':'No current orders found.';$('orderList').append(empty)}for(const o of list){const el=document.createElement('article');el.className='panel order';el.dataset.orderId=o.id;el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar order-status-controls"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','awaiting_materials','ready_to_print','printing','quality_check','packaging','ready_for_collection','ready_for_delivery','collected','delivered','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button></div><div class="order-extra-actions"><button class="addons" type="button">Order materials</button><button class="stock-check" type="button">Check materials</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="extras-edit" hidden></div><div class="material-check" role="status" hidden></div><div class="preview" hidden></div>`;
+ $('ordersCurrentCount').textContent=orders.filter(o=>['new','confirmed','awaiting_materials'].includes(o.fulfillment_status)).length;
+ $('ordersCompleteCount').textContent=orders.filter(o=>['completed','cancelled'].includes(o.fulfillment_status)).length;
+ $('orderViewSummary').textContent=completedView?'Completed and cancelled orders — available for review.':'Orders awaiting payment review and production approval.';
+ const q=$('search').value.trim().toLowerCase(),f=$('paymentFilter').value,stageFilter=$('stageFilter').value;const list=orders.filter(o=>(completedView?['completed','cancelled'].includes(o.fulfillment_status):['new','confirmed','awaiting_materials'].includes(o.fulfillment_status))&&(!f||o.payment_status===f)&&(!stageFilter||o.fulfillment_status===stageFilter)&&[o.id,o.customer_name,o.customer_phone].some(x=>String(x||'').toLowerCase().includes(q)));$('orderList').replaceChildren();if(!list.length){const empty=document.createElement('p');empty.className='pn-orders-empty';empty.textContent=completedView?'No completed orders found.':'No current orders found.';$('orderList').append(empty)}for(const o of list){const el=document.createElement('article');el.className='panel order';el.dataset.orderId=o.id;el.innerHTML=`<div class="order-head"><h3>${esc(o.id)}</h3><span class="pill">${esc(o.fulfillment_status)}</span></div><p><strong>${esc(o.customer_name)}</strong> · ${esc(o.customer_phone)} · ${o.total_cents===null?'Quote required':bnd(o.total_cents)}</p><p>${(o.items||[]).map(i=>esc(i.title)+' × '+Number(i.quantity)).join(' · ')}</p><p class="muted">${(o.items||[]).map(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null?esc(i.title)+' (×'+i.quantity+'): '+(Number(i.print_weight_g)*Number(i.quantity)).toFixed(2)+'g · '+Number(i.print_minutes)*Number(i.quantity)+'min · '+bnd(Number(i.print_cost_cents)*Number(i.quantity)):'').filter(Boolean).join(' | ')||'No stored Creality estimate (older order or product not configured)'}</p><p class="muted">${esc(o.notes||'No notes')}</p><div class="toolbar order-status-controls"><label>Payment<select class="pay">${opt(['unpaid','awaiting_review','verified','rejected'],o.payment_status)}</select></label><label>Production<select class="stage">${opt(['new','confirmed','awaiting_materials','ready_to_print','printing','quality_check','packaging','ready_for_collection','ready_for_delivery','collected','delivered','ready','completed','cancelled'],o.fulfillment_status)}</select></label><button class="save">Save status</button></div><div class="order-extra-actions"><button class="addons" type="button">Order materials</button><button class="stock-check" type="button">Check materials</button>${o.receipt_key?'<button class="receipt">View proof</button>':''}</div><div class="extras-edit" hidden></div><div class="material-check" role="status" hidden></div><div class="preview" hidden></div>`;
  const orderInfo=document.createElement('div');orderInfo.className='order-details-grid';
  const totalUnits=(o.items||[]).reduce((n,i)=>n+Number(i.quantity||0),0);
  const printInfo=(o.items||[]).every(i=>i.print_weight_g!=null&&i.print_minutes!=null&&i.print_cost_cents!=null);
  const summaries=[['Units',String(totalUnits)],['Placed',String(o.created_at||'—').slice(0,16)],['Creality estimates',printInfo?'Recorded':'Missing — edit Order materials']];
  for(const [heading,value] of summaries){const cell=document.createElement('div');cell.className='order-detail';const cap=document.createElement('small');cap.textContent=heading;const desc=document.createElement('strong');desc.textContent=value;cell.append(cap,desc);orderInfo.append(cell)}
  el.querySelector('.order-head').after(orderInfo);
+ // Production stage is now managed from the Production Board; Orders only reviews payment.
+ const stageField=el.querySelector('.stage')?.closest('label');if(stageField)stageField.hidden=true;
+ const paymentSave=el.querySelector('.save');paymentSave.textContent='Verify / Save payment';
+ if(!completedView&&['new','confirmed','awaiting_materials'].includes(o.fulfillment_status)){
+  const btn=document.createElement('button');btn.type='button';btn.className='pn-order-approve';btn.textContent='Approve & Send to Production';
+  btn.disabled=o.payment_status!=='verified';btn.title=btn.disabled?'Verify bank transfer first, then refresh':'Checks order-specific Creality estimates and allocated stock before approving';
+  btn.onclick=async()=>{btn.disabled=true;try{await api('approve-order',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:o.id})});await loadOrders();message('Order approved. It is now in Production → Ready to print. Inventory will only be deducted when printing starts.');}
+   catch(e){message('Approval blocked: '+e.message);btn.disabled=false}};
+  el.querySelector('.order-extra-actions').prepend(btn);
+ }
+ const advanced=document.createElement('details');advanced.className='pn-order-more';
+ const label=document.createElement('summary');label.textContent='Materials & checks ▾';
+ const tools=document.createElement('div');tools.className='pn-order-more-actions';
+ for(const selector of ['.addons','.stock-check']){const node=el.querySelector(selector);if(node)tools.append(node)}
+ advanced.append(label,tools);el.querySelector('.order-extra-actions').append(advanced);
+ const del=document.createElement('button');del.type='button';del.className='pn-delete-action';del.textContent='Delete order';del.onclick=()=>window.PrintNestV14?.open('orders',o.id);el.querySelector('.order-extra-actions').append(del);
  const personalizations=(o.items||[]).filter(i=>i.customization&&Object.values(i.customization).some(Boolean));
  if(personalizations.length){
   const pane=document.createElement('div');pane.className='order-personalizations';
@@ -369,6 +385,7 @@ function renderProductCatalog(){
     catch(e){productFeedback('Archive failed: '+e.message,true);archive.disabled=false}
    };
    const actions=document.createElement('div');actions.className='pn-product-actions';actions.append(toggle,archive);
+   const del=document.createElement('button');del.type='button';del.className='pn-delete-action';del.textContent='Delete';del.onclick=()=>window.PrintNestV14?.open('products',p.id);actions.append(del);
    card.append(image,badge,summary,actions,form);holder.append(card);
   }
 }
@@ -464,6 +481,16 @@ function filterInventoryLists(){
 
 function inventoryFeedback(text,error=false){const el=$('inventoryFeedback');el.hidden=!text;el.textContent=text;el.classList.toggle('finance-error',error)}
 const grams=mg=>(Number(mg||0)/1000).toFixed(2)+' g';
+const pnColour=name=>{const s=String(name||'').toLowerCase().trim();const colors={green:'#41a86f',red:'#d95867',blue:'#4e88da',pink:'#ed8eb1',white:'#f9f8f5',black:'#29232e',yellow:'#e7c53a',orange:'#ea974e',purple:'#9b72cd',grey:'#a4a2a8',gray:'#a4a2a8',gold:'#d2ac52',silver:'#bac3ca',brown:'#986951',beige:'#d5c3ae',clear:'#e6eced',transparent:'#e6eced'};return /^#[0-9a-f]{6}$/i.test(s)?s:Object.entries(colors).find(([key])=>s.includes(key))?.[1]||'#d8c5ce'};
+function pnCompactStock(card,content,color,percent,status,ref){
+ card.classList.add('pn-stock-card');const titleRow=document.createElement('div');titleRow.className='pn-stock-top';
+ const swatch=document.createElement('span');swatch.className='pn-stock-swatch';swatch.style.backgroundColor=color;swatch.title='Filament colour';
+ const badge=document.createElement('span');badge.className='pn-stock-pill'+(status==='low'?' is-low':status==='out'?' is-out':'');badge.textContent=status==='low'?'Low stock':status==='out'?'Out':'In stock';
+ content.replaceWith(titleRow);titleRow.append(swatch,content,badge);
+ const meter=document.createElement('div');meter.className='pn-stock-meter';const filled=document.createElement('span');filled.style.width=Math.max(0,Math.min(100,percent))+'%';meter.append(filled);card.append(meter);
+ const foot=document.createElement('div');foot.className='pn-stock-footer';const note=document.createElement('small');note.textContent=percent.toFixed(0)+'% remaining · '+ref;foot.append(note);card.append(foot);
+ const menu=document.createElement('details');menu.className='pn-stock-manage';const summary=document.createElement('summary');summary.textContent='Manage stock ▾';const actions=document.createElement('div');actions.className='pn-manage-buttons';menu.append(summary,actions);card.append(menu);return actions;
+}
 const timeDisplay=m=>{m=Number(m)||0;return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m'};
 async function loadInventory(){
  try{
@@ -483,6 +510,7 @@ async function loadInventory(){
    const title=document.createElement('strong');title.textContent=roll.label+(roll.remaining_mg===0?' · OUT OF STOCK':roll.remaining_mg<=100000?' · LOW STOCK':'');
    const info=document.createElement('small');info.textContent=roll.material+' · '+roll.color+' · '+grams(roll.remaining_mg)+' / '+grams(roll.initial_mg)+' remaining'+(roll.purchase_cost_cents==null?'':' · Purchased '+bnd(roll.purchase_cost_cents));
    content.append(title,info);card.append(content);
+   const pnManage=pnCompactStock(card,content,pnColour(roll.color),Number(roll.initial_mg)>0?Number(roll.remaining_mg)/Number(roll.initial_mg)*100:0,card.dataset.stockStatus,roll.id.slice(0,8));
    const btn=document.createElement('button');btn.type='button';btn.textContent='Adjust grams';
    btn.onclick=async()=>{
     const value=prompt('Adjust '+roll.label+' stock in grams. Enter +50 to add, or -15 to record usage. Current: '+grams(roll.remaining_mg),'');
@@ -498,7 +526,8 @@ async function loadInventory(){
     const amount=prompt('Total purchase amount BND:','');if(amount===null)return;
     if(!/^\d{1,7}(?:\.\d{1,2})?$/.test(amount.trim())||Number(amount)<=0){inventoryFeedback('Enter valid purchase amount.',true);return}
     buy.disabled=true;try{await api('inventory',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'purchase',stock_kind:'filament',id:roll.id,quantity:qty,amount,occurred_on:bruneiDate(),description:'Filament purchase: '+roll.label,request_key:crypto.randomUUID()})});await loadInventory();inventoryFeedback('Filament received and Finance purchase recorded.')}catch(e){inventoryFeedback(e.message,true)}finally{buy.disabled=false}
-   };card.append(buy);rolls.append(card);
+   };card.append(buy);btn.remove();buy.remove();pnManage.append(btn,buy);
+   const del=document.createElement('button');del.type='button';del.className='pn-delete-action';del.textContent='Delete';del.onclick=()=>window.PrintNestV14?.open('filament',roll.id);pnManage.append(del);rolls.append(card);
   }
   const items=$('stockList');items.replaceChildren();
   if(!stock.items.length)items.textContent='No other inventory items yet. Add boxes, accessories or supplies above.';
@@ -511,6 +540,7 @@ async function loadInventory(){
    const title=document.createElement('strong');title.textContent=item.name+' · '+item.quantity+' '+item.unit+(item.quantity===0?' · OUT OF STOCK':item.quantity<=5?' · LOW STOCK':'');
    const line=document.createElement('small');line.textContent=item.category+(item.unit_cost_cents==null?'':' · '+bnd(item.unit_cost_cents)+' / '+item.unit)+(item.notes?' · '+item.notes:'');
    content.append(title,line);card.append(content);
+   const pnManage=pnCompactStock(card,content,'#c9adc2',Number(item.quantity)>0?100:0,card.dataset.stockStatus,item.id.slice(0,8));
    const controls=document.createElement('div');controls.className='stock-controls';
    for(const [label,sign] of [['Stock correction (+)',1],['Stock correction (−)',-1]]){
     const btn=document.createElement('button');btn.type='button';btn.textContent=label;if(sign<0)btn.classList.add('stock-use');
@@ -533,7 +563,8 @@ async function loadInventory(){
      await api('inventory',{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'purchase',stock_kind:'item',id:item.id,quantity:qty,amount,occurred_on:bruneiDate(),description:'Restock: '+item.name,request_key:crypto.randomUUID()})});
      await loadInventory();inventoryFeedback('Stock received and linked Finance purchase recorded for '+item.name+'.');
     }catch(e){inventoryFeedback(e.message,true)}finally{buy.disabled=false}
-   };controls.append(buy);card.append(controls);items.append(card);
+   };controls.append(buy);pnManage.append(controls);
+   const del=document.createElement('button');del.type='button';del.className='pn-delete-action';del.textContent='Delete';del.onclick=()=>window.PrintNestV14?.open('inventory',item.id);pnManage.append(del);items.append(card);
   }
   filterInventoryLists();
   const history=$('runList');history.replaceChildren();
@@ -564,7 +595,11 @@ $('rollForm').addEventListener('input',e=>{
  if(e.target instanceof HTMLInputElement)e.target.classList.remove('roll-input-invalid');
  const out=$('rollFeedback');if(out.classList.contains('is-error'))rollFormFeedback('');
 });
-$('rollForm').onsubmit=async e=>{
+function updateRollBatchPreview(){const f=$('rollForm'),grams=Number(f.elements.namedItem('grams').value)||0,qty=Number(f.elements.namedItem('roll_quantity').value)||0,cost=Number(f.elements.namedItem('purchase_cost').value)||0;
+ $('rollBatchPreview').textContent=qty+' roll(s) · '+(grams*qty).toLocaleString('en-US')+' g total'+(cost?' · BND '+(cost*qty).toFixed(2)+' total purchase cost':'');}
+ $('rollForm').addEventListener('input',updateRollBatchPreview);
+ updateRollBatchPreview();
+ $('rollForm').onsubmit=async e=>{
  e.preventDefault();
  const f=e.currentTarget,btn=f.querySelector('button[type="submit"]');
  if(btn.disabled)return;
@@ -582,14 +617,16 @@ $('rollForm').onsubmit=async e=>{
   rollFormError(price,'Purchase cost must be a valid BND amount with up to 2 decimals, or leave it blank.');return;
  }
  const label=f.elements.namedItem('label').value.trim();
- const payload={...Object.fromEntries(new FormData(f)),action:'add_roll'};
+ const qty=Number(f.elements.namedItem('roll_quantity').value);
+ if(!Number.isInteger(qty)||qty<1||qty>30){rollFormError(f.elements.namedItem('roll_quantity'),'Quantity must be 1 to 30 rolls.');return}
+ const payload={...Object.fromEntries(new FormData(f)),action:'add_roll',roll_quantity:qty};
  btn.disabled=true;btn.textContent='Saving roll…';rollFormFeedback('Saving filament roll…');
  let saved=false;
  try{
   await api('production',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
   saved=true;
-  f.reset();f.elements.namedItem('material').value='PLA';f.elements.namedItem('grams').value='1000';
-  rollFormFeedback('Filament roll "'+label+'" saved successfully. Stock can be adjusted manually under Filament stock.');
+  f.reset();f.elements.namedItem('material').value='PLA';f.elements.namedItem('grams').value='1000';f.elements.namedItem('roll_quantity').value='1';updateRollBatchPreview();
+  rollFormFeedback(qty+' filament roll(s) saved successfully as separate records: '+label+'.');
   await loadInventory();
   inventoryFeedback('Filament roll added. No automatic stock deduction will occur.');
  }catch(err){

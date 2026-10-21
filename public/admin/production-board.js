@@ -2,7 +2,7 @@
 (() => {
   const $=id=>document.getElementById(id);
   const labels={new:'New',confirmed:'Confirmed',awaiting_materials:'Awaiting materials',ready_to_print:'Ready to print',printing:'Printing',quality_check:'Quality check',packaging:'Packaging',ready:'Ready (legacy)',ready_for_collection:'Ready for collection',ready_for_delivery:'Ready for delivery',collected:'Collected',delivered:'Delivered',completed:'Completed',cancelled:'Cancelled'};
-  const lanes=[['queued','New & confirmed'],['materials','Awaiting materials'],['ready','Ready to print'],['active','Printing & finishing'],['handover','Collection / delivery'],['completed','Completed'],['cancelled','Cancelled']];
+  const lanes=[['queued','Queued (legacy)'],['materials','Materials (legacy)'],['ready','Ready to print'],['active','Printing & finishing'],['handover','Collection / delivery'],['completed','Completed'],['cancelled','Cancelled']];
   const dateFmt=s=>s?String(s).replace('T',' ').slice(0,16):'Not scheduled';
   const money=n=>'BND '+((Number(n)||0)/100).toFixed(2);
   const els={};
@@ -97,16 +97,16 @@
     const grid=$('productionBoardGrid');if(!grid)return;grid.replaceChildren();
     const q=String($('productionSearch')?.value||'').trim().toLowerCase();
     const mode=$('productionVisibility')?.value||'active';
-    const filtered=jobs.filter(j=>(mode==='all'||!['completed','cancelled'].includes(j.status))&&(!q||[j.id,j.customer_name,j.customer_phone,...j.items.map(i=>i.title)].join(' ').toLowerCase().includes(q)));
-    const counts={queued:0,materials:0,ready:0,active:0,handover:0,completed:0,cancelled:0};for(const j of jobs)counts[j.lane]=(counts[j.lane]||0)+1;
+    const filtered=jobs.filter(j=>!['new','confirmed','awaiting_materials'].includes(j.status)&&(mode==='all'||!['completed','cancelled'].includes(j.status))&&(!q||[j.id,j.customer_name,j.customer_phone,...j.items.map(i=>i.title)].join(' ').toLowerCase().includes(q)));
+    const counts={queued:0,materials:0,ready:0,active:0,handover:0,completed:0,cancelled:0};for(const j of jobs.filter(j=>!['new','confirmed','awaiting_materials'].includes(j.status)))counts[j.lane]=(counts[j.lane]||0)+1;
     for(const [lane,title] of lanes){
-      if(mode!=='all'&&['completed','cancelled'].includes(lane))continue;
+      if(['queued','materials'].includes(lane)||(mode!=='all'&&['completed','cancelled'].includes(lane)))continue;
       const entries=filtered.filter(j=>j.lane===lane).sort((a,b)=>(a.priority==='urgent'?0:1)-(b.priority==='urgent'?0:1));
       const col=element('section','production-lane');const head=element('div','production-lane-head');head.append(element('h3','',title),element('span','production-count',String(counts[lane]||0)));col.append(head);
       if(!entries.length)col.append(element('p','production-empty',q?'No matching jobs':'No jobs in this stage'));
       else for(const j of entries)col.append(card(j));grid.append(col);
     }
-    $('productionTotal').textContent=String(jobs.filter(j=>!['completed','cancelled'].includes(j.status)).length);
+    $('productionTotal').textContent=String(jobs.filter(j=>!['completed','cancelled','new','confirmed','awaiting_materials'].includes(j.status)).length);
     $('productionActive').textContent=String(jobs.filter(j=>['printing','quality_check','packaging'].includes(j.status)).length);
     $('productionWaiting').textContent=String(jobs.filter(j=>j.lane==='materials').length);
     $('productionHandover').textContent=String(jobs.filter(j=>j.lane==='handover').length);
