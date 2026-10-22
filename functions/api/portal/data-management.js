@@ -83,14 +83,19 @@ export async function onRequestPost({request,env}){
      db.prepare("SELECT 1 AS x FROM printnest_bulk_roll_purchase_lines WHERE roll_id=? LIMIT 1").bind(id).first(),
      db.prepare('SELECT 1 AS x FROM printnest_roll_usage WHERE roll_id=? LIMIT 1').bind(id).first()
     ]);
-    if(usage||purchase||bulk||legacy)return invalid('Filament roll '+id+' has stock usage or purchase records. Reconcile linked history before deletion.',409);
+    if(usage||legacy)return invalid('Cannot delete '+id+': this roll has been used in production. Keep its historical usage record.',409);
+    // Unlink the deleted roll from stock-purchase mappings before deleting it.
+    // Keep the original financial expense and audit trail for accounting history.
+    if(purchase)statements.push(db.prepare("DELETE FROM printnest_stock_purchases WHERE stock_kind='filament' AND stock_id=?").bind(id));
+    if(bulk)statements.push(db.prepare('DELETE FROM printnest_bulk_roll_purchase_lines WHERE roll_id=?').bind(id));
     statements.push(db.prepare('DELETE FROM printnest_filament_rolls WHERE id=?').bind(id));
    }else if(kind==='inventory'){
     const [usage,purchase]=await Promise.all([
      db.prepare("SELECT 1 AS x FROM printnest_material_usage WHERE stock_kind='item' AND stock_id=? LIMIT 1").bind(id).first(),
      db.prepare("SELECT 1 AS x FROM printnest_stock_purchases WHERE stock_kind='item' AND stock_id=? LIMIT 1").bind(id).first()
     ]);
-    if(usage||purchase)return invalid('Inventory item '+id+' has production or Finance links. Reconcile linked history before deletion.',409);
+    if(usage)return invalid('Cannot delete '+id+': this inventory item has been used in production. Keep its historical usage record.',409);
+    if(purchase)statements.push(db.prepare("DELETE FROM printnest_stock_purchases WHERE stock_kind='item' AND stock_id=?").bind(id));
     statements.push(db.prepare('DELETE FROM printnest_inventory_items WHERE id=?').bind(id));
    }
   }

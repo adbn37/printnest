@@ -9,8 +9,19 @@
   const res=await fetch('/api/portal/'+path,{...options,headers:{Authorization:'Bearer '+token(),...options.headers},cache:'no-store'});
   const data=await res.json().catch(()=>({error:'Invalid response'}));if(!res.ok)throw Error(data.error||'Request failed');return data;
  }
- function report(text,error=false){$('dmStatus').textContent=text;$('dmStatus').classList.toggle('finance-error',error)}
+ function report(text,error=false){const out=$('dmStatus');out.textContent=text;out.hidden=!text;out.classList.toggle('finance-error',error)}
  function selectedIds(){return [...$('dmList').querySelectorAll('input:checked')].map(el=>el.value)}
+ function updateDeleteHelp(){
+  const kind=$('dmKind').value;
+  $('dmPhrase').textContent='DELETE '+kind.toUpperCase();
+  const hints={
+   orders:'Only unverified orders without production or Finance history can be removed.',
+   products:'Deleting a product removes its listing. Built-in sample products are hidden permanently.',
+   filament:'Unused filament rolls may be removed, even after a purchase was recorded. Finance expenses are retained. Rolls used for printing are protected.',
+   inventory:'Unused inventory items may be removed. Finance purchase expenses are retained; production usage is protected.'
+  };
+  $('dmDeleteHelp').textContent=hints[kind]||'';
+ }
  function render(){
   const kind=$('dmKind').value,list=$('dmList');list.replaceChildren();
   for(const r of records[kind]||[]){
@@ -23,9 +34,9 @@
    label.append(ck,text);list.append(label);
   }
   $('dmSelectedCount').textContent='0 selected';$('dmCount').textContent=(records[kind]||[]).length+' records';
-  $('dmConfirmation').value='';$('dmBackupAck').checked=false;
+  $('dmConfirmation').value='';$('dmBackupAck').checked=false;updateDeleteHelp();
  }
- async function load(){report('Loading record list…');try{records=await api('data-management');render();report('Select the records you want to remove. Linked payment, production and stock history is protected.')}catch(e){report(e.message,true)}}
+ async function load(){report('Loading record list…');try{records=await api('data-management');render();report('')}catch(e){report(e.message,true)}}
  async function open(kind,id=''){
   $('dmKind').value=kind;
   document.querySelector('[data-section="data-management"]')?.click();
@@ -60,7 +71,7 @@
   if(!confirm('PERMANENT deletion of '+count+' '+kind+' record(s). Linked records may block this action. Continue?'))return;
   $('dmDelete').disabled=true;try{
    const result=await api('data-management',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({kind,mode:all?'all':'selected',ids:all?undefined:ids,expected_count:all?count:undefined,confirmation:phrase,backup_ack:true})});
-   report('Deleted '+result.count+' records. Original backup remains in your Downloads.');backupDownloaded=false;await load();
+   backupDownloaded=false;await load();report('Deleted '+result.count+' '+kind+' record(s). Finance expense history, if any, was retained.');
   }catch(e){report(e.message,true)}finally{$('dmDelete').disabled=false}
  };
  window.PrintNestV14={open,load};

@@ -82,3 +82,12 @@
     gap: 12px;
 }
 
+/* V14.1: one clear delete guide, with feedback beside the delete action. */
+#data-management .pn-dm-help{margin:4px 0 0;color:#784a5e;font-size:13px;line-height:1.6}
+#data-management .pn-dm-confirm{display:grid;gap:7px;justify-items:start;margin:0}
+#data-management .pn-dm-confirm strong{font-size:14px;color:#8b3155;background:#fff;padding:5px 10px;border:1px solid #e9cdd7;border-radius:7px;letter-spacing:.02em}
+#data-management .pn-dm-confirm input{justify-self:stretch;min-width:0}
+#data-management .pn-dm-status{margin:0;padding:12px 14px;border-radius:10px;background:#f5eef9;color:#593d74;font-size:13px;line-height:1.5;overflow-wrap:anywhere}
+#data-management .pn-dm-status.finance-error{background:#fff0f1;color:#9c2949;border:1px solid #edbfca}
+#data-management .pn-dm-status[hidden]{display:none!important}
+
